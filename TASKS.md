@@ -146,4 +146,4 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Keep the main game's compact decomposition/composition indices eagerly loaded; do not fetch them per move.
 - [x] Let players select any drawable dictionary character and clearly leave unsupported physical mappings untorn.
 - [x] Verify lazy requests, an arbitrary dictionary-character tear, dynamic composition, production export, and the full playground browser suite against dev and the `/xiang` static export.
-- [ ] Commit and push the generated assets and UI changes; verify the GitHub Pages deployment.
+- [x] Commit and push the generated assets and UI changes; verify the GitHub Pages deployment.
