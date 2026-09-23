@@ -99,6 +99,7 @@ type TearPlan = {
     y: number;
     requiredX: number;
     requiredY: number;
+    withinBoard: boolean;
     ready: boolean;
   };
 };
@@ -106,8 +107,9 @@ type TearPlan = {
 const clamp = (value: number, low: number, high: number) =>
   Math.max(low, Math.min(high, value));
 const TILE_FACE_INSET = 38;
-const TILE_FACE_SIZE = 184;
-const TILE_CLEARANCE = 12;
+const TILE_FACE_SIZE = 156;
+const TILE_CLEARANCE = 10;
+const DEFAULT_GLYPH_SCALE = 0.36;
 const TILE_OVERLAP_EPSILON = 0.01;
 const MAGNET_FULL_ALIGNMENT_DISTANCE = TILE_FACE_SIZE + TILE_CLEARANCE * 3;
 const MAGNET_FAR_ALIGNMENT_STRENGTH = 0.15;
@@ -127,6 +129,7 @@ export class PlaygroundWorld {
   phase: "whole" | "stretching" | "loose" = "whole";
   message = "Pull a component outward. Stretch its seam to tear it free.";
   selectedCharacter = "想";
+  boardPreset: "starters" | "single" = "starters";
   physicsMode: PhysicsMode = "fixed";
   visualStyle: VisualStyle = "raised";
   softness = 0.55;
@@ -139,7 +142,7 @@ export class PlaygroundWorld {
   ) {
     this.assets = assets;
     this.compileAssets();
-    this.reset("想");
+    this.resetStarters();
   }
 
   private compileAssets() {
@@ -179,6 +182,10 @@ export class PlaygroundWorld {
     return this.objects.length > 0;
   }
 
+  get tileCount() {
+    return this.objects.length;
+  }
+
   private allBodies() {
     const bodies = this.objects.flatMap((object) => [
       object.body,
@@ -199,8 +206,8 @@ export class PlaygroundWorld {
     char: string,
     center: Point,
     free: boolean,
-    scaleX = 0.42,
-    scaleY = 0.42,
+    scaleX = DEFAULT_GLYPH_SCALE,
+    scaleY = DEFAULT_GLYPH_SCALE,
     velocity: Point = { x: 0, y: 0 },
   ): SceneObject {
     const strokes = this.assets.glyphs[char];
@@ -283,9 +290,18 @@ export class PlaygroundWorld {
     for (const body of this.allBodies()) body.reduced = reduced;
   }
 
-  reset(char = this.selectedCharacter) {
+  reset(char?: string) {
+    if (char === undefined && this.boardPreset === "starters") {
+      this.resetStarters();
+      return;
+    }
     this.cancelAll();
-    this.selectedCharacter = this.recipeByChar.has(char) ? char : "想";
+    this.boardPreset = "single";
+    this.selectedCharacter = this.recipeByChar.has(
+      char ?? this.selectedCharacter,
+    )
+      ? (char ?? this.selectedCharacter)
+      : "想";
     this.objects = [
       this.createObject(
         this.selectedCharacter,
@@ -300,13 +316,53 @@ export class PlaygroundWorld {
     );
   }
 
+  resetStarters() {
+    this.cancelAll();
+    this.boardPreset = "starters";
+    this.selectedCharacter = "想";
+    const characters = ["想", "相", "明", "休", "好"];
+    const columns =
+      this.width >= TILE_FACE_SIZE * 3 + 80
+        ? 3
+        : this.width >= TILE_FACE_SIZE * 2 + TILE_CLEARANCE + 24
+          ? 2
+          : 1;
+    const rows = Math.ceil(characters.length / columns);
+    const margin = 12;
+    const maxXSpan = Math.max(0, this.width - TILE_FACE_SIZE - margin * 2);
+    const maxYSpan = Math.max(0, this.height - TILE_FACE_SIZE - margin * 2);
+    const desiredXSpan = (columns - 1) * (TILE_FACE_SIZE + 44);
+    const desiredYSpan = (rows - 1) * (TILE_FACE_SIZE + 44);
+    const xSpan = Math.min(maxXSpan, Math.max(desiredXSpan, maxXSpan * 0.72));
+    const ySpan = Math.min(maxYSpan, Math.max(desiredYSpan, maxYSpan * 0.72));
+    this.objects = characters.map((char, index) => {
+      const row = Math.floor(index / columns);
+      const rowCount = Math.min(columns, characters.length - row * columns);
+      const column = index % columns;
+      const xStep = columns > 1 ? xSpan / (columns - 1) : 0;
+      const yStep = rows > 1 ? ySpan / (rows - 1) : 0;
+      const center = {
+        x: this.width / 2 + (column - (rowCount - 1) / 2) * xStep,
+        y: this.height / 2 + (row - (rows - 1) / 2) * yStep,
+      };
+      return this.createObject(char, center, false);
+    });
+    this.preview = null;
+    this.setPhase(
+      "whole",
+      "Five starters are ready. Pull a component away from any character to explore it.",
+    );
+  }
+
   resize(width: number, height: number) {
     const selected = this.selectedCharacter;
+    const preset = this.boardPreset;
     this.cancelAll();
     this.width = width;
     this.height = height;
     this.compileAssets();
-    this.reset(selected);
+    if (preset === "starters") this.resetStarters();
+    else this.reset(selected);
   }
 
   private beginTear(object: SceneObject, partIndex: number) {
@@ -669,12 +725,16 @@ export class PlaygroundWorld {
     const requiredY = face.height + TILE_CLEARANCE;
     const x = Math.abs(second.center.x - first.center.x);
     const y = Math.abs(second.center.y - first.center.y);
-    let ready = this.facesClear(
-      first.center,
-      first.face,
-      second.center,
-      second.face,
+    const withinBoard = placements.every(
+      ({ center, face: tileFace }) =>
+        center.x >= tileFace.width / 2 &&
+        center.x <= this.width - tileFace.width / 2 &&
+        center.y >= tileFace.height / 2 &&
+        center.y <= this.height - tileFace.height / 2,
     );
+    let ready =
+      this.facesClear(first.center, first.face, second.center, second.face) &&
+      withinBoard;
     const existing = this.objects.filter((object) => object !== source);
     for (const placement of placements)
       for (const object of existing)
@@ -693,6 +753,7 @@ export class PlaygroundWorld {
         y,
         requiredX,
         requiredY,
+        withinBoard,
         ready,
       },
     };
@@ -985,7 +1046,9 @@ export class PlaygroundWorld {
           this.commitTear(plan);
           return true;
         }
-        this.message = "Keep pulling until the tile faces have room.";
+        this.message = plan.clearance.withinBoard
+          ? "Keep pulling until the tile faces have room."
+          : "Guide both pieces back inside the board before they separate.";
       } else {
         const part =
           this.preview.source.recipe!.parts[this.preview.partIndex].char;
@@ -1112,6 +1175,7 @@ export class PlaygroundWorld {
       coordinates: "CSS pixels from canvas top-left; x right, y down",
       physicsMode: this.physicsMode,
       visualStyle: this.visualStyle,
+      boardPreset: this.boardPreset,
       phase: this.phase,
       message: this.message,
       dragging: this.contacts.size > 0,

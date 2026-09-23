@@ -37,7 +37,7 @@ const assertUniformTiles = (characters, label) => {
     `${label} characters use the same tile size`,
   );
   assert.ok(
-    sizes[0][0] < 220 && sizes[0][0] === sizes[0][1],
+    sizes[0][0] <= 160 && sizes[0][0] === sizes[0][1],
     `${label} tile face is compact and square`,
   );
 };
@@ -67,7 +67,15 @@ const getFaceOverlap = (first, second) => ({
 const dragTileFace = async (target, box, snapshot, character, center) => {
   const tile = snapshot.characters.find((item) => item.char === character);
   assert.ok(tile, `find ${character} tile to drag`);
-  const grip = { x: tile.tile.width * 0.4, y: -tile.tile.height * 0.4 };
+  const horizontalGrip = tile.tile.width * 0.4;
+  const verticalGrip = tile.tile.height * 0.4;
+  const grip = {
+    x:
+      tile.tile.center.x + horizontalGrip > box.width
+        ? -horizontalGrip
+        : horizontalGrip,
+    y: tile.tile.center.y - verticalGrip < 0 ? verticalGrip : -verticalGrip,
+  };
   const start = {
     x: tile.tile.center.x + grip.x,
     y: tile.tile.center.y + grip.y,
@@ -180,14 +188,44 @@ const drag = async (target, box, start, movements, dx, dy = 0) => {
     await advance(target, 1000 / 60);
   }
 };
+const assertTilesInsideBoard = (characters, board, label) => {
+  for (const { char, tile } of characters) {
+    assert.ok(
+      tile.center.x >= tile.width / 2 - 1 &&
+        tile.center.x <= board.width - tile.width / 2 + 1 &&
+        tile.center.y >= tile.height / 2 - 1 &&
+        tile.center.y <= board.height - tile.height / 2 + 1,
+      `${label}: ${char} stays fully on the board`,
+    );
+  }
+};
 mkdirSync("output/playground", { recursive: true });
 
 try {
   await load();
   let current = await state();
   assert.equal(current.character, "想");
+  assert.equal(current.boardPreset, "starters");
   assert.equal(current.physicsMode, "fixed");
   assert.equal(current.visualStyle, "raised");
+  assert.equal(
+    await page.getByText("A LITTLE EXPERIMENT IN FEELING").count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByRole("complementary", { name: "Playground controls" })
+      .count(),
+    1,
+  );
+  assert.deepEqual(
+    current.characters.map((object) => object.char),
+    ["想", "相", "明", "休", "好"],
+    "the playground starts with five decomposable characters",
+  );
+  assertNoTileOverlap(current.characters, "five starter board");
+  assertUniformTiles(current.characters, "five starter board");
+  assert.equal(current.characters[0].tile.width, 156);
   assert.deepEqual(
     ["想", "相", "明", "休", "好"].map((char) => char),
     await page
@@ -196,9 +234,38 @@ try {
   );
   const canvas = page.locator("canvas");
   let box = await canvas.boundingBox();
-  const home = current.pose;
-  const tileHome = current.characters[0].tile.center;
-  assertUniformTiles(current.characters, "initial");
+  assert.ok(
+    box.height >= 780,
+    "the desktop gameboard uses more vertical space",
+  );
+  assertTilesInsideBoard(current.characters, box, "five starter board");
+  const heartStart = screenPoint(box, current.componentGrabPoints["心"][0]);
+  await page.mouse.move(heartStart.x, heartStart.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 50 && current.phase !== "loose"; i++) {
+    await page.mouse.move(heartStart.x, heartStart.y + i * 9);
+    await advance(page, 1000 / 60);
+    current = await state();
+  }
+  assert.equal(current.phase, "loose");
+  assert.equal(current.boardPreset, "starters");
+  assert.equal(current.characters.length, 6);
+  assert.deepEqual(
+    [...current.characters.map((object) => object.char)].sort(),
+    ["休", "好", "心", "明", "相", "相"],
+  );
+  assertNoTileOverlap(current.characters, "five starter tear");
+  assertUniformTiles(current.characters, "five starter tear");
+  assertTilesInsideBoard(current.characters, box, "five starter tear");
+  await page.screenshot({
+    path: "output/playground/five-starter-tear.png",
+    fullPage: true,
+  });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Five starters" }).click();
+  current = await state();
+  assert.equal(current.characters.length, 5);
+  assertNoTileOverlap(current.characters, "restored five starter board");
   for (const style of ["flat", "raised", "draped"]) {
     await page.locator(`input[name="visual-style"][value="${style}"]`).check();
     await page.waitForFunction(
@@ -210,6 +277,20 @@ try {
       fullPage: true,
     });
   }
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.waitForFunction(
+    () => document.querySelector("canvas")?.clientWidth > 1000,
+  );
+  box = await canvas.boundingBox();
+  await page.getByRole("button", { name: "想", exact: true }).click();
+  current = await state();
+  assert.equal(current.boardPreset, "single");
+  assert.deepEqual(
+    current.characters.map((object) => object.char),
+    ["想"],
+  );
+  const home = current.pose;
+  const tileHome = current.characters[0].tile.center;
   await page.locator('input[name="visual-style"][value="draped"]').check();
   current = await state();
   box = await canvas.boundingBox();
@@ -237,7 +318,7 @@ try {
   });
 
   // Bare tile face is a whole-character grip. Fixed pins its center; Weighted moves.
-  const tileGrip = { x: tileHome.x - 90, y: tileHome.y };
+  const tileGrip = { x: tileHome.x - 70, y: tileHome.y };
   await drag(page, box, tileGrip, 4, 6, 4);
   current = await state();
   assert.equal(current.dragging, true);
@@ -271,7 +352,7 @@ try {
   const weightedHome = current.pose;
   box = await canvas.boundingBox();
   const weightedTileGrip = {
-    x: current.characters[0].tile.center.x - 90,
+    x: current.characters[0].tile.center.x - 70,
     y: current.characters[0].tile.center.y,
   };
   await drag(page, box, weightedTileGrip, 10, 7, 4);
@@ -352,6 +433,7 @@ try {
   assert.equal(current.phase, "loose");
   assertUniformTiles(current.characters, "decomposed");
   assertNoTileOverlap(current.characters, "first tear");
+  assertTilesInsideBoard(current.characters, box, "first tear");
   assert.deepEqual(
     current.characters.map((object) => object.char),
     ["相", "心"],
@@ -367,6 +449,14 @@ try {
   const nestedStart = freeXiang.grabPoints[3];
   await drag(page, box, nestedStart, 30, 9, 1);
   current = await state();
+  for (let i = 31; i <= 80 && current.phase === "stretching"; i++) {
+    await page.mouse.move(
+      box.x + nestedStart.x + i * 9,
+      box.y + nestedStart.y + i,
+    );
+    await advance(page, 1000 / 60);
+    current = await state();
+  }
   assert.equal(current.phase, "loose");
   assert.deepEqual(
     [...current.characters.map((object) => object.char)].sort(),
@@ -374,6 +464,7 @@ try {
   );
   assertUniformTiles(current.characters, "nested decomposition");
   assertNoTileOverlap(current.characters, "nested tear");
+  assertTilesInsideBoard(current.characters, box, "nested tear");
   assert.equal(current.activeContacts[0].character, "木");
   const wood = current.characters.find((object) => object.char === "木");
   const eye = current.characters.find((object) => object.char === "目");
@@ -388,7 +479,7 @@ try {
   );
   await page.screenshot({
     path: "output/playground/nested-pieces.png",
-    fullPage: true,
+    fullPage: false,
   });
   await page.mouse.up();
   current = await state();
@@ -480,6 +571,7 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
   await load(inkReassembly);
+  await inkReassembly.getByRole("button", { name: "想", exact: true }).click();
   let inkState = await state(inkReassembly);
   const inkCanvas = inkReassembly.locator("canvas");
   const inkBox = await inkCanvas.boundingBox();
@@ -495,6 +587,7 @@ try {
     inkState.characters.map((object) => object.char),
     ["相", "心"],
   );
+  assertTilesInsideBoard(inkState.characters, inkBox, "ink-contact tear");
   assert.match(inkState.message, /hold one piece's ink over the other tile/);
   await inkReassembly.mouse.up();
   inkState = await state(inkReassembly);
@@ -558,6 +651,7 @@ try {
     ["木", "目"],
   );
   assertNoTileOverlap(current.characters, "horizontal 相 tear");
+  assertTilesInsideBoard(current.characters, box, "horizontal 相 tear");
   assert.equal(
     current.magnet.active,
     false,
@@ -592,6 +686,7 @@ try {
   }
   assert.equal(current.phase, "loose");
   assertNoTileOverlap(current.characters, "想 tear");
+  assertTilesInsideBoard(current.characters, box, "想 tear");
   assert.deepEqual(
     current.characters.map((object) => object.char),
     ["相", "心"],
@@ -721,8 +816,18 @@ try {
     await page.getByRole("button", { name: character, exact: true }).click();
     current = await state();
     assert.equal(current.character, character);
+    assert.equal(current.boardPreset, "single");
     assert.equal(Object.keys(current.componentGrabPoints).length, 2);
   }
+  await page.getByRole("button", { name: "Five starters" }).click();
+  current = await state();
+  assert.equal(current.boardPreset, "starters");
+  assert.equal(current.characters.length, 5);
+  assertNoTileOverlap(current.characters, "restored five starter board");
+  await page.getByRole("button", { name: "Reset" }).click();
+  current = await state();
+  assert.equal(current.boardPreset, "starters");
+  assert.equal(current.characters.length, 5);
 
   // Released ink returns to its own tile when it is outside a composition field.
   const restoration = await browser.newPage({
@@ -733,6 +838,7 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
   await load(restoration);
+  await restoration.getByRole("button", { name: "想", exact: true }).click();
   await restoration
     .locator('input[name="physics-mode"][value="weighted"]')
     .check();
@@ -861,6 +967,10 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
   await load(mobile);
+  let mobileState = await state(mobile);
+  assert.equal(mobileState.characters.length, 5);
+  assertNoTileOverlap(mobileState.characters, "mobile five starter board");
+  await mobile.getByRole("button", { name: "想", exact: true }).click();
   assert.equal((await state(mobile)).reducedMotion, true);
   await mobile.getByLabel("Reduce motion").uncheck();
   await mobile.waitForFunction(
@@ -905,14 +1015,14 @@ try {
     touchPoints: [first, second, third, fourth],
   });
   assert.equal((await state(mobile)).contactCount, 4);
-  const initialXiangX = (await state(mobile)).componentPoints["相"].x;
+  const initialXiangY = (await state(mobile)).componentPoints["相"].y;
   for (let i = 1; i <= 60 && touched.phase !== "loose"; i++) {
     await cdp.send("Input.dispatchTouchEvent", {
       type: "touchMove",
       touchPoints: [
-        { ...first, y: first.y + i * 8 },
+        { ...first, y: first.y - i * 8 },
         second,
-        { ...third, y: third.y + i * 8 },
+        { ...third, y: third.y - i * 8 },
         fourth,
       ],
     });
@@ -931,13 +1041,15 @@ try {
   );
   assert.equal(touched.contactCount, 4);
   assertNoTileOverlap(touched.characters, "multitouch tear");
+  assertTilesInsideBoard(touched.characters, mobileBox, "multitouch tear");
   assert.deepEqual(
     touched.characters.map((object) => object.char),
     ["相", "心"],
   );
   assert.ok(
-    touched.characters.find((object) => object.char === "相").inkCenter.x >
-      initialXiangX,
+    touched.characters.find((object) => object.char === "相").inkCenter.y <
+      initialXiangY,
+    "the two contacts pulling 相 move its ink up",
   );
   await cdp.send("Input.dispatchTouchEvent", {
     type: "touchEnd",

@@ -261,3 +261,11 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** With the source tile anchored, a one-finger ink drag cannot move that tile into overlap. Requiring tile overlap alone made stroke-led recombination impossible unless a second contact moved the source tile.
 
 **Consequences:** Players can recombine with one hand by dragging the component's ink onto its compatible tile and guiding the strokes into alignment. A merely nearby drag or a separated, unattended pair still exerts no magnetic pull.
+
+## D-033 — Five-tile playground starter board and expanded lab layout
+
+**Decision (2026-09-23):** Start the physics playground with five separate reviewed characters (想, 相, 明, 休, 好). Keep single-character presets available and add a Five starters reset. Reduce every tile face from 184 × 184 to 156 × 156 CSS pixels, scale the default ink with it, and preserve uniform tile sizing for detached and recomposed pieces. Move setup controls and interaction instructions into a side panel beside the desktop board; stack the panel below the taller board on narrow screens. Remove the “A LITTLE EXPERIMENT IN FEELING” eyebrow.
+
+**Why:** The canvas needs more of the viewport and enough compact, consistent tiles for the intended multi-character exploration loop. Placing lab controls beside the canvas gives the board more height without hiding the controls.
+
+**Consequences:** Initial board tiles are spaced in a responsive two- or three-column layout, and the Five starters preset can be restored after exploring or tearing pieces. A tear commits only when both new faces fit within the board and clear one another and every existing tile. The side panel moves below the board on phones; the board remains tall enough to rearrange several pieces.

@@ -13,7 +13,13 @@ import {
 import type { VisualStyle } from "@/lib/wobbleDrawing";
 import styles from "./playground.module.css";
 
-type Status = { phase: string; message: string; character: string };
+type Status = {
+  phase: string;
+  message: string;
+  character: string;
+  boardPreset: "starters" | "single";
+  tileCount: number;
+};
 const samples = ["想", "相", "明", "休", "好"];
 
 export default function Playground() {
@@ -37,8 +43,10 @@ export default function Playground() {
   const [status, setStatus] = useState<Status>({
     phase: "whole",
     message:
-      "Pull one of the mapped components outward. It will stretch before it tears free.",
+      "Five starters are ready. Pull a component away from any character to explore it.",
     character: "想",
+    boardPreset: "starters",
+    tileCount: 5,
   });
 
   useEffect(() => {
@@ -102,6 +110,8 @@ export default function Playground() {
         phase: world.phase,
         message: world.message,
         character: world.selectedCharacter,
+        boardPreset: world.boardPreset,
+        tileCount: world.tileCount,
       });
     };
     const cancel = () => {
@@ -313,7 +323,13 @@ export default function Playground() {
     const world = worldRef.current;
     if (!world) return;
     world.reset(char);
-    setStatus({ phase: world.phase, message: world.message, character: char });
+    setStatus({
+      phase: world.phase,
+      message: world.message,
+      character: char,
+      boardPreset: world.boardPreset,
+      tileCount: world.tileCount,
+    });
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (canvas && ctx) {
@@ -336,7 +352,30 @@ export default function Playground() {
         );
     }
   };
-  const reset = () => selectCharacter(status.character);
+  const selectStarters = () => {
+    const world = worldRef.current;
+    if (!world) return;
+    world.resetStarters();
+    setStatus({
+      phase: world.phase,
+      message: world.message,
+      character: world.selectedCharacter,
+      boardPreset: world.boardPreset,
+      tileCount: world.tileCount,
+    });
+  };
+  const reset = () => {
+    const world = worldRef.current;
+    if (!world) return;
+    world.reset();
+    setStatus({
+      phase: world.phase,
+      message: world.message,
+      character: world.selectedCharacter,
+      boardPreset: world.boardPreset,
+      tileCount: world.tileCount,
+    });
+  };
   const nudge = () => {
     worldRef.current?.nudge();
   };
@@ -355,185 +394,214 @@ export default function Playground() {
           Back to the game ↗
         </Link>
       </header>
-      <section className={styles.intro}>
-        <p className={styles.eyebrow}>A LITTLE EXPERIMENT IN FEELING</p>
-        <h1>
-          Pull it apart. Bring it back together<span>.</span>
-        </h1>
-        <p>
-          Raised and Draped styles use same-size tiles. Pull the ink to stretch
-          or tear while the tile stays put; keep pulling until there is room for
-          both tiles. Drag a blank area of the face to move the whole character
-          in Weighted mode.
-        </p>
-      </section>
+      <div className={styles.workspace}>
+        <section
+          className={styles.boardColumn}
+          aria-label="Character gameboard"
+        >
+          <section className={styles.intro}>
+            <h1>
+              Pull it apart. Bring it back together<span>.</span>
+            </h1>
+          </section>
 
-      <section className={styles.labControls} aria-label="Playground setup">
-        <div className={styles.samples}>
-          <span className={styles.controlLabel}>Try a character</span>
-          <div className={styles.sampleButtons}>
-            {samples.map((char) => (
-              <button
-                key={char}
-                type="button"
-                disabled={!ready}
-                aria-pressed={status.character === char}
-                onClick={() => selectCharacter(char)}
-              >
-                {char}
-              </button>
-            ))}
-          </div>
-        </div>
-        <fieldset className={styles.modePicker}>
-          <legend>Character weight</legend>
-          <label>
-            <input
-              type="radio"
-              name="physics-mode"
-              value="fixed"
-              checked={mode === "fixed"}
-              onChange={() => setMode("fixed")}
+          <div className={styles.stage} ref={stageRef}>
+            <canvas
+              ref={canvasRef}
+              tabIndex={0}
+              role="application"
+              aria-label={`Physical ${status.boardPreset === "starters" ? "five starter characters" : status.character} playground in ${visualStyle} surface style. Drag visible ink to pull a component while its tile stays in place. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.`}
+              aria-describedby="playground-keys"
             />
-            Fixed <span>stays centered</span>
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="physics-mode"
-              value="weighted"
-              checked={mode === "weighted"}
-              onChange={() => setMode("weighted")}
-            />
-            Weighted <span>moves with resistance</span>
-          </label>
-        </fieldset>
-      </section>
-
-      <fieldset className={styles.stylePicker}>
-        <legend>Surface style</legend>
-        <label>
-          <input
-            type="radio"
-            name="visual-style"
-            value="flat"
-            checked={visualStyle === "flat"}
-            onChange={() => setVisualStyle("flat")}
-          />
-          Flat <span>ink only</span>
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="visual-style"
-            value="raised"
-            checked={visualStyle === "raised"}
-            onChange={() => setVisualStyle("raised")}
-          />
-          Raised <span>embossed</span>
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="visual-style"
-            value="draped"
-            checked={visualStyle === "draped"}
-            onChange={() => setVisualStyle("draped")}
-          />
-          Draped <span>over the edge</span>
-        </label>
-      </fieldset>
-
-      <div className={styles.stage} ref={stageRef}>
-        <canvas
-          ref={canvasRef}
-          tabIndex={0}
-          role="application"
-          aria-label={`Physical ${status.character} playground in ${visualStyle} surface style. Raised and Draped tiles are the same size. Drag visible ink to pull a component while the tile stays in place. Drag the blank tile face to move the whole character in Weighted mode. Overlap compatible tiles, or hold ink over the compatible tile while the strokes drift into place and snap together.`}
-          aria-describedby="playground-keys"
-        />
-        {!ready && (
-          <div className={styles.loading} role="status">
-            {error ? (
-              <>
-                <span>The character outlines couldn’t load.</span>
-                <button
-                  onClick={() => {
-                    setError(false);
-                    setAttempt((value) => value + 1);
-                  }}
-                >
-                  Try again
-                </button>
-              </>
-            ) : (
-              "The characters are taking shape…"
+            {!ready && (
+              <div className={styles.loading} role="status">
+                {error ? (
+                  <>
+                    <span>The character outlines couldn’t load.</span>
+                    <button
+                      onClick={() => {
+                        setError(false);
+                        setAttempt((value) => value + 1);
+                      }}
+                    >
+                      Try again
+                    </button>
+                  </>
+                ) : (
+                  "The characters are taking shape…"
+                )}
+              </div>
             )}
+            <span className={styles.characterNote} aria-live="polite">
+              <strong>
+                {status.boardPreset === "starters"
+                  ? `${status.tileCount} tiles`
+                  : status.character}
+              </strong>{" "}
+              <i>{status.phase}</i>
+            </span>
+            <span className={styles.stageNote} aria-hidden="true">
+              A little give. A little gravity.
+            </span>
           </div>
-        )}
-        <span className={styles.characterNote} aria-live="polite">
-          <strong>{status.character}</strong> <i>{status.phase}</i>
-        </span>
-        <span className={styles.stageNote} aria-hidden="true">
-          A little give. A little gravity.
-        </span>
-      </div>
-      <p className={styles.liveMessage} role="status" aria-live="polite">
-        {status.message}
-      </p>
+          <p className={styles.liveMessage} role="status" aria-live="polite">
+            {status.message}
+          </p>
+        </section>
 
-      <div className={styles.controls}>
-        <label className={styles.softness}>
-          Softness
-          <input
-            aria-label="Softness"
-            type="range"
-            min="0"
-            max="100"
-            value={softness}
-            disabled={reduced}
-            onChange={(event) => setSoftness(Number(event.target.value))}
-          />
-          <span>
-            {reduced
-              ? "Still"
-              : softness < 34
-                ? "Firm"
-                : softness > 70
-                  ? "Floppy"
-                  : "Supple"}
-          </span>
-        </label>
-        <div className={styles.actions}>
-          <button disabled={!ready} onClick={nudge}>
-            Give it a nudge <span aria-hidden="true">↝</span>
-          </button>
-          <button disabled={!ready} onClick={reset}>
-            Reset <span aria-hidden="true">↺</span>
-          </button>
-        </div>
+        <aside className={styles.sidebar} aria-label="Playground controls">
+          <section className={styles.instructions}>
+            <p className={styles.panelLabel}>HOW TO PLAY</p>
+            <h2>Pull, place, recombine</h2>
+            <p>
+              Start with five characters. Pull a mapped stroke group away until
+              it becomes its own tile. Hold ink over a compatible tile or
+              overlap the tiles to guide the strokes back together.
+            </p>
+            <p>
+              Drag a blank tile face to move the whole character. Fixed keeps it
+              centered; Weighted gives it more movement.
+            </p>
+          </section>
+
+          <section className={styles.boardPicker} aria-label="Starting board">
+            <span className={styles.controlLabel}>Starting board</span>
+            <button
+              className={styles.starterButton}
+              type="button"
+              disabled={!ready}
+              aria-pressed={status.boardPreset === "starters"}
+              onClick={selectStarters}
+            >
+              Five starters
+            </button>
+          </section>
+
+          <section className={styles.samples} aria-label="Try one character">
+            <span className={styles.controlLabel}>Try one character</span>
+            <div className={styles.sampleButtons}>
+              {samples.map((char) => (
+                <button
+                  key={char}
+                  type="button"
+                  disabled={!ready}
+                  aria-pressed={
+                    status.boardPreset === "single" && status.character === char
+                  }
+                  onClick={() => selectCharacter(char)}
+                >
+                  {char}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <fieldset className={styles.modePicker}>
+            <legend>Character weight</legend>
+            <label>
+              <input
+                type="radio"
+                name="physics-mode"
+                value="fixed"
+                checked={mode === "fixed"}
+                onChange={() => setMode("fixed")}
+              />
+              Fixed <span>stays centered</span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="physics-mode"
+                value="weighted"
+                checked={mode === "weighted"}
+                onChange={() => setMode("weighted")}
+              />
+              Weighted <span>moves with resistance</span>
+            </label>
+          </fieldset>
+
+          <fieldset className={styles.stylePicker}>
+            <legend>Surface style</legend>
+            <label>
+              <input
+                type="radio"
+                name="visual-style"
+                value="flat"
+                checked={visualStyle === "flat"}
+                onChange={() => setVisualStyle("flat")}
+              />
+              Flat <span>ink only</span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="visual-style"
+                value="raised"
+                checked={visualStyle === "raised"}
+                onChange={() => setVisualStyle("raised")}
+              />
+              Raised <span>embossed</span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="visual-style"
+                value="draped"
+                checked={visualStyle === "draped"}
+                onChange={() => setVisualStyle("draped")}
+              />
+              Draped <span>over the edge</span>
+            </label>
+          </fieldset>
+
+          <section className={styles.controls} aria-label="Physics controls">
+            <label className={styles.softness}>
+              Softness
+              <input
+                aria-label="Softness"
+                type="range"
+                min="0"
+                max="100"
+                value={softness}
+                disabled={reduced}
+                onChange={(event) => setSoftness(Number(event.target.value))}
+              />
+              <span>
+                {reduced
+                  ? "Still"
+                  : softness < 34
+                    ? "Firm"
+                    : softness > 70
+                      ? "Floppy"
+                      : "Supple"}
+              </span>
+            </label>
+            <div className={styles.actions}>
+              <button disabled={!ready} onClick={nudge}>
+                Give it a nudge <span aria-hidden="true">↝</span>
+              </button>
+              <button disabled={!ready} onClick={reset}>
+                Reset <span aria-hidden="true">↺</span>
+              </button>
+            </div>
+          </section>
+
+          <footer className={styles.footer}>
+            <label>
+              <input
+                type="checkbox"
+                checked={reduced}
+                onChange={(event) => setReduced(event.target.checked)}
+              />{" "}
+              Reduce motion
+            </label>
+            <p id="playground-keys">
+              Keyboard: arrows to nudge · R to reset · F for fullscreen · Escape
+              to release.
+            </p>
+          </footer>
+        </aside>
       </div>
-      <footer className={styles.footer}>
-        <p id="playground-keys">
-          Raised and Draped tiles are the same size. Pull ink until the child
-          tile has room beside its sibling; the parent tile stays in place. Drag
-          a blank area of the face to move the whole character in Weighted mode.
-          Overlap compatible tile faces, or hold ink over the compatible tile
-          while strokes drift into place and snap.{" "}
-          <span>
-            Keyboard: arrows to nudge · R to reset · F for fullscreen · Escape
-            to release
-          </span>
-        </p>
-        <label>
-          <input
-            type="checkbox"
-            checked={reduced}
-            onChange={(event) => setReduced(event.target.checked)}
-          />{" "}
-          Reduce motion
-        </label>
-      </footer>
       <p className={styles.credit}>
         Reviewed outlines and component matches:{" "}
         <a
