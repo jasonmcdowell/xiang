@@ -1,0 +1,1 @@
+{"character":"森","decomposition":"⿱木⿰木木","parts":[{"character":"木","strokeIndices":[0,1,2,3]},{"character":"林","strokeIndices":[4,5,6,7,8,9,10,11]}],"review":"Group the lower nested 木 + 木 as 林 so the playground can recombine this character in two pairwise steps."}

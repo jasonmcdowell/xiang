@@ -33,6 +33,7 @@ export type PlaygroundAssets = {
       embeddedStrokes: string[];
     }[];
   }[];
+  compositionParents?: Record<string, string[]>;
 };
 
 type PartAsset = PlaygroundAssets["recipes"][number]["parts"][number] & {
@@ -116,6 +117,7 @@ const TILE_OVERLAP_EPSILON = 0.01;
 const MAGNET_FULL_ALIGNMENT_DISTANCE = TILE_FACE_SIZE + TILE_CLEARANCE * 3;
 const MAGNET_FAR_ALIGNMENT_STRENGTH = 0.15;
 const MAGNET_FULL_STRENGTH_OVERLAP = 32;
+const compositionKey = (a: string, b: string) => [a, b].sort().join("|");
 
 export class PlaygroundWorld {
   private readonly assets: PlaygroundAssets;
@@ -174,6 +176,63 @@ export class PlaygroundWorld {
     this.recipeByChar = new Map(
       this.recipes.map((recipe) => [recipe.char, recipe]),
     );
+  }
+
+  registerAssets(assets: PlaygroundAssets) {
+    const existingRecipes = new Set(
+      this.objects.map((object) => object.recipe?.char),
+    );
+    const newRecipes = assets.recipes.filter(
+      (recipe) => !this.recipeByChar.has(recipe.char),
+    );
+    if (assets.compositionParents)
+      this.assets.compositionParents = assets.compositionParents;
+    const newGlyphs = Object.fromEntries(
+      Object.entries(assets.glyphs).filter(
+        ([character]) => !this.assets.glyphs[character],
+      ),
+    );
+    if (!Object.keys(newGlyphs).length && !newRecipes.length) return;
+    Object.assign(this.assets.glyphs, newGlyphs);
+    this.assets.recipes.push(...newRecipes);
+    this.compileAssets();
+    for (const object of this.objects)
+      object.recipe = this.recipeByChar.get(object.char) ?? null;
+    const newlyReady = this.objects
+      .filter((object) => object.recipe && !existingRecipes.has(object.char))
+      .map((object) => object.char);
+    if (newlyReady.length && this.phase === "loose" && !this.preview)
+      this.message = `Component strokes are ready for ${newlyReady.join(", ")}. Pull one to continue.`;
+  }
+
+  charactersOnBoard() {
+    return this.objects.map((object) => object.char);
+  }
+
+  hasRecipeFor(character: string) {
+    return this.recipeByChar.has(character);
+  }
+
+  compositionAssetCandidates() {
+    const index = this.assets.compositionParents ?? {};
+    const candidates = new Set<string>();
+    for (let i = 0; i < this.objects.length; i++) {
+      const a = this.objects[i];
+      if (!a.free) continue;
+      for (let j = i + 1; j < this.objects.length; j++) {
+        const b = this.objects[j];
+        if (!b.free) continue;
+        if (
+          !this.tileOverlap(a.surfaceBody, b.surfaceBody) &&
+          !this.heldInkOnFace(a, b) &&
+          !this.heldInkOnFace(b, a)
+        )
+          continue;
+        for (const parent of index[compositionKey(a.char, b.char)] ?? [])
+          if (!this.recipeByChar.has(parent)) candidates.add(parent);
+      }
+    }
+    return [...candidates];
   }
 
   get pointerIds() {
@@ -301,11 +360,11 @@ export class PlaygroundWorld {
     }
     this.cancelAll();
     this.boardPreset = "single";
-    this.selectedCharacter = this.recipeByChar.has(
-      char ?? this.selectedCharacter,
-    )
-      ? (char ?? this.selectedCharacter)
-      : "想";
+    this.selectedCharacter = char ?? this.selectedCharacter;
+    if (!this.assets.glyphs[this.selectedCharacter])
+      throw new Error(
+        `Missing playground glyph for ${this.selectedCharacter}.`,
+      );
     this.objects = [
       this.createObject(
         this.selectedCharacter,
@@ -316,7 +375,9 @@ export class PlaygroundWorld {
     this.preview = null;
     this.setPhase(
       "whole",
-      "Pull a component outward. Stretch its seam to tear it free.",
+      this.recipeByChar.has(this.selectedCharacter)
+        ? "Pull a component outward. Stretch its seam to tear it free."
+        : `${this.selectedCharacter} has an outline, but no complete physical component mapping yet.`,
     );
   }
 
@@ -1222,6 +1283,10 @@ export class PlaygroundWorld {
     return match ? this.magnetVisual(match) : null;
   }
 
+  get loadedGlyphCount() {
+    return Object.keys(this.assets.glyphs).length;
+  }
+
   snapshot() {
     const active = this.preview?.restBody ?? this.objects[0]?.body;
     const magnetMatch = this.findMagnet();
@@ -1263,6 +1328,9 @@ export class PlaygroundWorld {
       mode: "wobble-playground",
       character: this.selectedCharacter,
       ready: this.isReady,
+      loadedGlyphCount: this.loadedGlyphCount,
+      loadedRecipeCount: this.recipeByChar.size,
+      loadedRecipeCharacters: [...this.recipeByChar.keys()],
       coordinates: "CSS pixels from canvas top-left; x right, y down",
       physicsMode: this.physicsMode,
       visualStyle: this.visualStyle,

@@ -2,14 +2,23 @@ import {
   createReadStream,
   mkdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { createInterface } from "node:readline";
 
-const SAMPLE_CHARACTERS = ["想", "相", "明", "休", "好", "林", "森"];
+const STARTERS = ["想", "相", "明", "休", "好"];
+const SAMPLES = [...STARTERS, "林", "森"];
+const DATA_DIRECTORY = "public/data/playground";
+const GLYPH_DIRECTORY = `${DATA_DIRECTORY}/glyphs`;
+const RECIPE_DIRECTORY = `${DATA_DIRECTORY}/recipes`;
 
-async function findCharacters(file, characters) {
-  const found = new Map();
+const isHanCharacter = (value) =>
+  typeof value === "string" && /^\p{Unified_Ideograph}$/u.test(value);
+const assetName = (character) =>
+  `${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}.json`;
+
+async function readJsonLines(file, map, accept) {
   const source = createInterface({
     input: createReadStream(file),
     crlfDelay: Infinity,
@@ -17,10 +26,9 @@ async function findCharacters(file, characters) {
   for await (const line of source) {
     if (!line.trim()) continue;
     const entry = JSON.parse(line);
-    if (characters.has(entry.character)) found.set(entry.character, entry);
-    if (found.size === characters.size) break;
+    if (accept(entry)) map.set(entry.character, entry);
   }
-  return found;
+  return map;
 }
 
 const decompositions = JSON.parse(
@@ -29,49 +37,71 @@ const decompositions = JSON.parse(
 const extensions = JSON.parse(
   readFileSync("data/decomposition_extensions.json", "utf8"),
 );
-const parents = new Map(
-  SAMPLE_CHARACTERS.map((character) => [character, decompositions[character]]),
-);
-const childCharacters = [
-  ...new Set(
-    SAMPLE_CHARACTERS.flatMap(
-      (character) =>
-        extensions[character]?.playground?.children ?? parents.get(character),
-    ),
-  ),
-];
-const allCharacters = new Set([...SAMPLE_CHARACTERS, ...childCharacters]);
-const [graphics, dictionary] = await Promise.all([
-  findCharacters("data/makemeahanzi/graphics.txt", allCharacters),
-  findCharacters(
+const [dictionary, graphics] = await Promise.all([
+  readJsonLines(
     "data/makemeahanzi/dictionary.txt",
-    new Set(SAMPLE_CHARACTERS),
+    new Map(),
+    (entry) => isHanCharacter(entry.character) && Array.isArray(entry.matches),
+  ),
+  readJsonLines(
+    "data/makemeahanzi/graphics.txt",
+    new Map(),
+    (entry) =>
+      isHanCharacter(entry.character) &&
+      Array.isArray(entry.strokes) &&
+      entry.strokes.length > 0 &&
+      entry.strokes.every((stroke) => typeof stroke === "string"),
   ),
 ]);
 
-const recipes = [];
-for (const character of SAMPLE_CHARACTERS) {
-  const playgroundRecipe = extensions[character]?.playground;
-  const children = playgroundRecipe?.children ?? parents.get(character);
-  const parent = dictionary.get(character);
+rmSync(GLYPH_DIRECTORY, { recursive: true, force: true });
+rmSync(RECIPE_DIRECTORY, { recursive: true, force: true });
+mkdirSync(GLYPH_DIRECTORY, { recursive: true });
+mkdirSync(RECIPE_DIRECTORY, { recursive: true });
+
+for (const [character, glyph] of graphics) {
+  writeFileSync(
+    `${GLYPH_DIRECTORY}/${assetName(character)}`,
+    `${JSON.stringify({ character, strokes: glyph.strokes })}\n`,
+  );
+}
+
+const recipeCharacters = [];
+const compositionParents = new Map();
+let exactBinaryCount = 0;
+let reviewedGroupingCount = 0;
+let ineligibleMappingCount = 0;
+
+for (const [character, childrenFromIndex] of Object.entries(decompositions)) {
+  const dictionaryEntry = dictionary.get(character);
   const glyph = graphics.get(character);
+  if (!dictionaryEntry || !glyph) continue;
+
+  const reviewed = extensions[character]?.playground;
+  const children = reviewed?.children ?? childrenFromIndex;
+  if (!Array.isArray(children) || children.length !== 2) continue;
+
   if (
-    !Array.isArray(children) ||
-    children.length !== 2 ||
-    !glyph?.strokes?.length ||
-    !parent?.matches ||
-    (playgroundRecipe &&
-      (!playgroundRecipe.reason ||
-        !Array.isArray(playgroundRecipe.strokePathPrefixes) ||
-        playgroundRecipe.strokePathPrefixes.length !== children.length))
+    reviewed &&
+    (!reviewed.reason ||
+      !Array.isArray(reviewed.strokePathPrefixes) ||
+      reviewed.strokePathPrefixes.length !== children.length)
   ) {
-    throw new Error(`Missing complete two-child source data for ${character}.`);
+    throw new Error(`Incomplete reviewed stroke grouping for ${character}.`);
   }
+  if (
+    !Array.isArray(dictionaryEntry.matches) ||
+    dictionaryEntry.matches.length !== glyph.strokes.length
+  ) {
+    ineligibleMappingCount += 1;
+    continue;
+  }
+
   const parts = children.map((child, childIndex) => {
-    const strokeIndices = parent.matches
+    const strokeIndices = dictionaryEntry.matches
       .map((match, strokeIndex) => {
-        if (playgroundRecipe) {
-          const prefixes = playgroundRecipe.strokePathPrefixes[childIndex];
+        if (reviewed) {
+          const prefixes = reviewed.strokePathPrefixes[childIndex];
           return Array.isArray(prefixes) &&
             prefixes.some(
               (prefix) =>
@@ -87,79 +117,108 @@ for (const character of SAMPLE_CHARACTERS) {
           : -1;
       })
       .filter((strokeIndex) => strokeIndex >= 0);
-    const standalone = graphics.get(child);
-    if (!strokeIndices.length || !standalone?.strokes?.length) {
-      throw new Error(`Missing reviewed stroke group ${character} → ${child}.`);
-    }
-    return {
-      char: child,
-      strokeIndices,
-      embeddedStrokes: strokeIndices.map((i) => glyph.strokes[i]),
-    };
+    return { character: child, strokeIndices };
   });
-  const assignedStrokes = parts.flatMap((part) => part.strokeIndices);
-  if (
-    assignedStrokes.length !== glyph.strokes.length ||
-    new Set(assignedStrokes).size !== glyph.strokes.length ||
-    assignedStrokes.some(
-      (strokeIndex) => strokeIndex < 0 || strokeIndex >= glyph.strokes.length,
-    )
-  ) {
-    throw new Error(
-      `The reviewed stroke groups for ${character} are incomplete or overlap.`,
-    );
+  const assigned = parts.flatMap((part) => part.strokeIndices);
+  const valid =
+    parts.every(
+      (part) =>
+        isHanCharacter(part.character) &&
+        graphics.has(part.character) &&
+        part.strokeIndices.length > 0,
+    ) &&
+    assigned.length === glyph.strokes.length &&
+    new Set(assigned).size === glyph.strokes.length &&
+    assigned.every((index) => index >= 0 && index < glyph.strokes.length);
+  if (!valid) {
+    ineligibleMappingCount += 1;
+    continue;
   }
-  recipes.push({
-    char: character,
-    decomposition: parent.decomposition,
-    strokes: glyph.strokes,
+
+  const recipe = {
+    character,
+    decomposition: dictionaryEntry.decomposition,
     parts,
-  });
+    ...(reviewed ? { review: reviewed.reason } : {}),
+  };
+  writeFileSync(
+    `${RECIPE_DIRECTORY}/${assetName(character)}`,
+    `${JSON.stringify(recipe)}\n`,
+  );
+  recipeCharacters.push(character);
+  if (reviewed) reviewedGroupingCount += 1;
+  else exactBinaryCount += 1;
+
+  const pairKey = [...children].sort().join("|");
+  const parents = compositionParents.get(pairKey) ?? new Set();
+  parents.add(character);
+  compositionParents.set(pairKey, parents);
 }
 
-const glyphs = Object.fromEntries(
-  [...allCharacters].sort().map((character) => {
-    const glyph = graphics.get(character);
-    if (!glyph?.strokes?.length)
-      throw new Error(`Missing glyph for ${character}.`);
-    return [character, glyph.strokes];
-  }),
+for (const character of STARTERS) {
+  if (!graphics.has(character) || !recipeCharacters.includes(character))
+    throw new Error(
+      `The starting character ${character} is not physics-ready.`,
+    );
+}
+
+const compositionIndex = Object.fromEntries(
+  [...compositionParents.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, parents]) => [key, [...parents].sort()]),
 );
-const output = {
+const manifest = {
+  schemaVersion: 2,
   source: "https://github.com/skishore/makemeahanzi",
   license: "/data/licenses/ARPHICPL.TXT",
   copyright: "Copyright (C) 1999 Arphic Technology Co., Ltd.",
   modification:
-    "Xiang, 2026-09-23: extracted original glyph outlines for 想, 相, 明, 休, 好, 林, 森, and their reviewed pairwise playground recipes. Stroke membership is derived from dictionary.txt matches; for 森, its lower nested 木 + 木 group is reviewed as 林. Component placements are derived at runtime from these unaltered outlines. Distributed under the Arphic Public License, without warranty.",
-  glyphs,
-  recipes,
+    "Xiang, 2026-09-23: extracted Make Me a Hanzi stroke outlines into codepoint-keyed files. Per-character recipes preserve complete dictionary stroke matches; reviewed nested groupings are identified in their recipe file. Distributed under the Arphic Public License, without warranty.",
+  defaultCharacters: STARTERS,
+  sampleCharacters: SAMPLES,
+  glyphCount: graphics.size,
+  recipeCount: recipeCharacters.length,
+  recipeCharacters: recipeCharacters.sort(),
+  compositionParents: compositionIndex,
 };
-mkdirSync("public/data/playground", { recursive: true });
-writeFileSync(
-  "public/data/playground/scene.json",
-  `${JSON.stringify(output)}\n`,
-);
+writeFileSync(`${DATA_DIRECTORY}/scene.json`, `${JSON.stringify(manifest)}\n`);
 
-// Preserve the original one-character playground asset for existing links.
-const xiang = recipes.find((recipe) => recipe.char === "想");
+const xiangRecipe = JSON.parse(
+  readFileSync(`${RECIPE_DIRECTORY}/${assetName("想")}`, "utf8"),
+);
+const xiangGlyph = graphics.get("想");
 writeFileSync(
-  "public/data/playground/xiang.json",
+  `${DATA_DIRECTORY}/xiang.json`,
   `${JSON.stringify({
-    character: xiang.char,
-    strokes: xiang.strokes,
-    parts: xiang.parts.map((part) => ({
-      ...part,
-      standaloneStrokes: glyphs[part.char],
+    character: "想",
+    strokes: xiangGlyph.strokes,
+    parts: xiangRecipe.parts.map((part) => ({
+      char: part.character,
+      strokeIndices: part.strokeIndices,
+      embeddedStrokes: part.strokeIndices.map(
+        (index) => xiangGlyph.strokes[index],
+      ),
+      standaloneStrokes: graphics.get(part.character).strokes,
     })),
-    decomposition: xiang.decomposition,
-    ...Object.fromEntries(
-      ["source", "license", "copyright", "modification"].map((key) => [
-        key,
-        output[key],
-      ]),
-    ),
+    decomposition: xiangRecipe.decomposition,
+    source: manifest.source,
+    license: manifest.license,
+    copyright: manifest.copyright,
+    modification: manifest.modification,
   })}\n`,
 );
+
 console.log(
-  `Generated ${recipes.length} reviewed character recipes and ${Object.keys(glyphs).length} glyphs.`,
+  JSON.stringify(
+    {
+      glyphs: graphics.size,
+      eligiblePhysicalRecipes: recipeCharacters.length,
+      exactBinaryMappings: exactBinaryCount,
+      reviewedPairwiseGroupings: reviewedGroupingCount,
+      incompleteOrUnsupportedMappings: ineligibleMappingCount,
+      compatiblePairs: Object.keys(compositionIndex).length,
+    },
+    null,
+    2,
+  ),
 );

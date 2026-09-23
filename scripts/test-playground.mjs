@@ -6,6 +6,13 @@ const browser = await chromium.launch();
 const base = process.env.XIANG_TEST_URL || "http://127.0.0.1:3000";
 const page = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
 const errors = [];
+const glyphRequests = new Set();
+page.on("request", (request) => {
+  const match = request
+    .url()
+    .match(/\/data\/playground\/glyphs\/([A-F0-9]+)\.json(?:\?|$)/i);
+  if (match) glyphRequests.add(match[1].toUpperCase());
+});
 page.on("pageerror", (error) => errors.push(error.message));
 page.on("console", (message) => {
   if (message.type() === "error") errors.push(message.text());
@@ -320,6 +327,12 @@ try {
     ["想", "相", "明", "休", "好"],
     "the playground starts with five decomposable characters",
   );
+  assert.equal(current.loadedRecipeCount, 5);
+  assert.ok(
+    current.loadedGlyphCount <= 16 && glyphRequests.size <= 16,
+    `the starter board should fetch only its local outlines, got ${current.loadedGlyphCount} glyphs / ${glyphRequests.size} requests`,
+  );
+  assert.equal(current.loadedGlyphCount < 100, true);
   assertNoTileOverlap(current.characters, "five starter board");
   assertUniformTiles(current.characters, "five starter board");
   assert.equal(current.characters[0].tile.width, 156);
@@ -329,13 +342,53 @@ try {
       .getByRole("button", { name: /^[想相明休好林森]$/ })
       .allTextContents(),
   );
+  await page.getByLabel("Any dictionary character").fill("信");
+  await page.getByRole("button", { name: "Explore" }).click();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).character === "信",
+  );
+  current = await state();
+  assert.equal(current.characters[0].decomposable, true);
+  assert.ok(current.loadedGlyphCount <= 16);
+  assert.ok(
+    glyphRequests.has("4FE1"),
+    "fetch the requested 信 outline on demand",
+  );
+  assert.ok(glyphRequests.has("8A00"), "fetch 信's child 言 outline on demand");
+  const arbitraryBox = await page.locator("canvas").boundingBox();
+  current = await tearComponent(page, arbitraryBox, current, "信", "人");
+  await page.mouse.up();
+  current = await state();
+  assert.deepEqual(
+    current.characters.map((object) => object.char).sort(),
+    ["人", "言"],
+    "a dynamically loaded dictionary character uses its precise tear mapping",
+  );
+  await page.getByLabel("Any dictionary character").fill("一");
+  await page.getByRole("button", { name: "Explore" }).click();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).character === "一",
+  );
+  current = await state();
+  assert.equal(current.characters[0].decomposable, false);
+  assert.match(current.message, /no complete physical component mapping/i);
+  assert.ok(
+    glyphRequests.has("4E00"),
+    "fetch a drawable character without a tear recipe",
+  );
   await page.getByRole("button", { name: "林", exact: true }).click();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).character === "林",
+  );
   current = await state();
   assert.deepEqual(
     current.characters.map((object) => object.char),
     ["林"],
   );
   await page.getByRole("button", { name: "森", exact: true }).click();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).character === "森",
+  );
   current = await state();
   assert.deepEqual(
     current.characters.map((object) => object.char),
@@ -1274,6 +1327,71 @@ try {
   await mobile.waitForTimeout(100);
   assert.equal((await state(mobile)).contactCount, 0);
 
+  // Fetch an unseen composition recipe when two independently torn pieces meet.
+  const crossComposeLab = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  crossComposeLab.on("pageerror", (error) => errors.push(error.message));
+  crossComposeLab.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await load(crossComposeLab);
+  const crossBox = await crossComposeLab.locator("canvas").boundingBox();
+  let crossState = await state(crossComposeLab);
+  crossState = await tearComponent(
+    crossComposeLab,
+    crossBox,
+    crossState,
+    "好",
+    "子",
+  );
+  await crossComposeLab.mouse.up();
+  crossState = await state(crossComposeLab);
+  crossState = await tearComponent(
+    crossComposeLab,
+    crossBox,
+    crossState,
+    "休",
+    "人",
+  );
+  await crossComposeLab.mouse.up();
+  crossState = await state(crossComposeLab);
+  const looseSeed = crossState.characters.find(
+    (object) => object.char === "子",
+  );
+  const looseWood = crossState.characters.find(
+    (object) => object.char === "木",
+  );
+  assert.ok(looseSeed && looseWood);
+  crossState = await dragTileFace(
+    crossComposeLab,
+    crossBox,
+    crossState,
+    "子",
+    { x: looseWood.tile.center.x + 88, y: looseWood.tile.center.y },
+    looseSeed.id,
+  );
+  await crossComposeLab.waitForFunction(() =>
+    JSON.parse(window.render_game_to_text()).loadedRecipeCharacters.includes(
+      "李",
+    ),
+  );
+  crossState = await state(crossComposeLab);
+  assert.equal(crossState.magnet.parent, "李");
+  crossState = await guideHeldTileToMagnet(
+    crossComposeLab,
+    crossBox,
+    crossState,
+    looseSeed.id,
+    "李",
+  );
+  assert.ok(
+    crossState.characters.some((object) => object.char === "李"),
+    "子 + 木 load and compose as 李 when their tiles meet",
+  );
+  await crossComposeLab.mouse.up();
+  await crossComposeLab.close();
+
   // Build 森 from 木 pieces through the reviewed pairwise 林 recipe.
   const woodLab = await browser.newPage({
     viewport: { width: 1200, height: 1000 },
@@ -1284,6 +1402,9 @@ try {
   });
   await load(woodLab);
   await woodLab.getByRole("button", { name: "森", exact: true }).click();
+  await woodLab.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).character === "森",
+  );
   const woodBox = await woodLab.locator("canvas").boundingBox();
   let woodState = await state(woodLab);
   woodState = await tearComponent(woodLab, woodBox, woodState, "森", "木");
@@ -1293,6 +1414,11 @@ try {
     "森 tears into 木 and the nested 林 group",
   );
   await woodLab.mouse.up();
+  await woodLab.waitForFunction(() =>
+    JSON.parse(window.render_game_to_text()).characters.some(
+      (object) => object.char === "林" && object.decomposable,
+    ),
+  );
   woodState = await state(woodLab);
   woodState = await tearComponent(woodLab, woodBox, woodState, "林", "木");
   assert.deepEqual(
@@ -1402,7 +1528,7 @@ try {
   await page.getByRole("button", { name: "Split 想", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Playground passed: flat/raised/draped rendering and hit testing, fixed and weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
+    "Playground passed: lazy glyph requests and arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
   );
 } finally {
   await browser.close();

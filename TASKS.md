@@ -139,3 +139,11 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Keep the character in a tear preview until new tile faces have visible clearance from each other and every existing tile.
 - [x] Keep separated 相 + 心 within a gentle capture range and verify they can snap into 想 from a direct tile drag.
 - [x] Verify no-overlap tear geometry for nested and direct tears in browser tests.
+
+## Follow-up — Dynamic physical character data
+- [x] Generate a paths-free catalog and one codepoint-keyed outline and recipe asset per eligible character.
+- [x] Fetch only visible glyphs, their immediate tear mappings, and compatible parent assets when pieces reach contact.
+- [x] Keep the main game's compact decomposition/composition indices eagerly loaded; do not fetch them per move.
+- [x] Let players select any drawable dictionary character and clearly leave unsupported physical mappings untorn.
+- [x] Verify lazy requests, an arbitrary dictionary-character tear, dynamic composition, production export, and the full playground browser suite against dev and the `/xiang` static export.
+- [ ] Commit and push the generated assets and UI changes; verify the GitHub Pages deployment.

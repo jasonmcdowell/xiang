@@ -216,7 +216,9 @@
 }
 
 .starterButton:disabled,
-.sampleButtons button:disabled {
+.sampleButtons button:disabled,
+.characterForm button:disabled,
+.characterForm input:disabled {
   opacity: 0.55;
 }
 
@@ -241,6 +243,53 @@
 .sampleButtons button[aria-pressed="true"] {
   border-color: #486853;
   background: #e9edde;
+}
+
+.characterForm {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.characterForm label,
+.characterForm p {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.characterForm > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.characterForm input,
+.characterForm button {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.characterForm input {
+  padding: 5px 9px;
+  font:
+    20px/1 "Kaiti SC",
+    "Songti SC",
+    serif;
+}
+
+.characterForm button {
+  padding: 0 11px;
+  background: #e9edde;
+  font-size: 11px;
+}
+
+.characterForm p {
+  line-height: 1.4;
+  margin: 0;
 }
 
 .modePicker,

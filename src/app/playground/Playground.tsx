@@ -4,12 +4,13 @@ import Link from "next/link";
 import { publicAssetUrl } from "@/lib/publicAssetUrl";
 import { useEffect, useRef, useState } from "react";
 import { STEP, type Point } from "@/lib/wobble";
-import { drawConnections, drawLayers, drawMagnet } from "@/lib/wobbleDrawing";
 import {
-  PlaygroundWorld,
-  type PhysicsMode,
-  type PlaygroundAssets,
-} from "@/lib/playgroundWorld";
+  loadPlaygroundAssets,
+  loadPlaygroundManifest,
+  type PlaygroundManifest,
+} from "@/lib/playgroundAssetsClient";
+import { drawConnections, drawLayers, drawMagnet } from "@/lib/wobbleDrawing";
+import { PlaygroundWorld, type PhysicsMode } from "@/lib/playgroundWorld";
 import type { VisualStyle } from "@/lib/wobbleDrawing";
 import styles from "./playground.module.css";
 
@@ -20,12 +21,13 @@ type Status = {
   boardPreset: "starters" | "single";
   tileCount: number;
 };
-const samples = ["想", "相", "明", "休", "好", "林", "森"];
+const starterSamples = ["想", "相", "明", "休", "好", "林", "森"];
 
 export default function Playground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<PlaygroundWorld | null>(null);
+  const manifestRef = useRef<PlaygroundManifest | null>(null);
   const ratioRef = useRef(1);
   const settingsRef = useRef({
     softness: 55,
@@ -34,6 +36,11 @@ export default function Playground() {
     visualStyle: "raised" as VisualStyle,
   });
   const [ready, setReady] = useState(false);
+  const [samples, setSamples] = useState(starterSamples);
+  const [glyphCount, setGlyphCount] = useState<number | null>(null);
+  const [characterInput, setCharacterInput] = useState("");
+  const [selectionBusy, setSelectionBusy] = useState(false);
+  const [selectionError, setSelectionError] = useState("");
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [softness, setSoftness] = useState(55);
@@ -64,7 +71,6 @@ export default function Playground() {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    const abort = new AbortController();
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     let disposed = false;
     let frame = 0;
@@ -72,6 +78,8 @@ export default function Playground() {
     let elapsed = 0;
     let manual = false;
     let observer: ResizeObserver | null = null;
+    let lastAssetSignature = "";
+    manifestRef.current = null;
 
     const draw = () => {
       const world = worldRef.current;
@@ -114,6 +122,41 @@ export default function Playground() {
         tileCount: world.tileCount,
       });
     };
+    const requestSceneAssets = () => {
+      const world = worldRef.current;
+      const manifest = manifestRef.current;
+      if (!world || !manifest) return;
+      const characters = world.charactersOnBoard();
+      const compositions = world.compositionAssetCandidates();
+      const signature = `${[...characters].sort().join("")}|${[...compositions].sort().join("")}`;
+      if (signature === lastAssetSignature) return;
+      lastAssetSignature = signature;
+      const waiting = [...characters, ...compositions].filter(
+        (character) =>
+          manifest.recipeCharacters.includes(character) &&
+          !world.hasRecipeFor(character),
+      );
+      if (waiting.length)
+        setStatus((current) => ({
+          ...current,
+          message: `Loading component strokes for ${[...new Set(waiting)].join(", ")}…`,
+        }));
+      void loadPlaygroundAssets(characters, manifest, compositions)
+        .then((assets) => {
+          if (disposed || worldRef.current !== world) return;
+          world.registerAssets(assets);
+          publish();
+          draw();
+        })
+        .catch(() => {
+          if (disposed) return;
+          setStatus((current) => ({
+            ...current,
+            message:
+              "Some character outlines could not be loaded. Try selecting that character again.",
+          }));
+        });
+    };
     const cancel = () => {
       const ids = worldRef.current?.pointerIds ?? [];
       worldRef.current?.cancelAll();
@@ -136,6 +179,7 @@ export default function Playground() {
       canvas.setPointerCapture(event.pointerId);
       canvas.style.cursor = "grabbing";
       publish();
+      requestSceneAssets();
       draw();
     };
     const move = (event: PointerEvent) => {
@@ -144,6 +188,7 @@ export default function Playground() {
       if (!world.pointerIds.includes(event.pointerId)) return;
       event.preventDefault();
       world.pointerMove(coordinates(event), event.pointerId);
+      requestSceneAssets();
       draw();
     };
     const up = (event: PointerEvent) => {
@@ -153,6 +198,7 @@ export default function Playground() {
       if (canvas.hasPointerCapture(event.pointerId))
         canvas.releasePointerCapture(event.pointerId);
       canvas.style.cursor = world.pointerIds.length ? "grabbing" : "grab";
+      requestSceneAssets();
       publish();
       draw();
     };
@@ -215,6 +261,7 @@ export default function Playground() {
       const world = worldRef.current;
       if (!world || !Number.isFinite(ms) || ms < 0) return;
       if (world.advance(ms)) publish();
+      requestSceneAssets();
       draw();
     };
     const tick = (now: number) => {
@@ -223,6 +270,7 @@ export default function Playground() {
         elapsed += previous ? Math.min((now - previous) / 1000, 0.05) : STEP;
         while (elapsed >= STEP) {
           if (world.step()) publish();
+          requestSceneAssets();
           elapsed -= STEP;
         }
       }
@@ -244,22 +292,25 @@ export default function Playground() {
     canvas.addEventListener("lostpointercapture", lost);
     const preferenceFrame = requestAnimationFrame(onPreference);
 
-    fetch(publicAssetUrl("data/playground/scene.json"), {
-      signal: abort.signal,
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error("Playground data unavailable");
-        return response.json();
-      })
-      .then((assets: PlaygroundAssets) => {
-        if (disposed) return;
+    loadPlaygroundManifest()
+      .then(async (manifest) => {
+        if (disposed) return null;
+        manifestRef.current = manifest;
+        setSamples(manifest.sampleCharacters);
+        setGlyphCount(manifest.glyphCount);
         if (
-          !assets.recipes?.length ||
-          !assets.glyphs ||
-          samples.some(
-            (char) => !assets.recipes.some((recipe) => recipe.char === char),
+          manifest.defaultCharacters.length !== 5 ||
+          manifest.defaultCharacters.some(
+            (character) => !manifest.recipeCharacters.includes(character),
           )
         )
+          throw new Error("Incomplete playground character catalog");
+        return loadPlaygroundAssets(manifest.defaultCharacters, manifest);
+      })
+      .then((assets) => {
+        if (!assets) return;
+        if (disposed) return;
+        if (!assets.recipes?.length || !assets.glyphs)
           throw new Error("Incomplete playground data");
         const resize = () => {
           cancel();
@@ -288,6 +339,7 @@ export default function Playground() {
         resize();
         observer = new ResizeObserver(resize);
         observer.observe(canvas);
+        requestSceneAssets();
         setReady(true);
         setError(false);
         frame = requestAnimationFrame(tick);
@@ -298,7 +350,6 @@ export default function Playground() {
 
     return () => {
       disposed = true;
-      abort.abort();
       cancel();
       cancelAnimationFrame(frame);
       cancelAnimationFrame(preferenceFrame);
@@ -319,10 +370,25 @@ export default function Playground() {
     };
   }, [attempt]);
 
-  const selectCharacter = (char: string) => {
+  const selectCharacter = async (char: string) => {
     const world = worldRef.current;
-    if (!world) return;
-    world.reset(char);
+    const manifest = manifestRef.current;
+    if (!world || !manifest) return;
+    setSelectionBusy(true);
+    setSelectionError("");
+    try {
+      const assets = await loadPlaygroundAssets([char], manifest);
+      if (worldRef.current !== world) return;
+      world.registerAssets(assets);
+      world.reset(char);
+    } catch {
+      setSelectionError(
+        `No usable drawing data was found for ${char}. Try another dictionary character.`,
+      );
+      setSelectionBusy(false);
+      return;
+    }
+    setSelectionBusy(false);
     setStatus({
       phase: world.phase,
       message: world.message,
@@ -352,10 +418,19 @@ export default function Playground() {
         );
     }
   };
+  const submitCharacter = () => {
+    const character = characterInput.trim();
+    if (Array.from(character).length !== 1) {
+      setSelectionError("Enter one Chinese character.");
+      return;
+    }
+    void selectCharacter(character);
+  };
   const selectStarters = () => {
     const world = worldRef.current;
     if (!world) return;
     world.resetStarters();
+    setSelectionError("");
     setStatus({
       phase: world.phase,
       message: world.message,
@@ -478,13 +553,13 @@ export default function Playground() {
           </section>
 
           <section className={styles.samples} aria-label="Try one character">
-            <span className={styles.controlLabel}>Try one character</span>
+            <span className={styles.controlLabel}>Try a character</span>
             <div className={styles.sampleButtons}>
               {samples.map((char) => (
                 <button
                   key={char}
                   type="button"
-                  disabled={!ready}
+                  disabled={!ready || selectionBusy}
                   aria-pressed={
                     status.boardPreset === "single" && status.character === char
                   }
@@ -494,6 +569,39 @@ export default function Playground() {
                 </button>
               ))}
             </div>
+            <form
+              className={styles.characterForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitCharacter();
+              }}
+            >
+              <label htmlFor="playground-character">
+                Any dictionary character
+              </label>
+              <div>
+                <input
+                  id="playground-character"
+                  value={characterInput}
+                  maxLength={2}
+                  autoComplete="off"
+                  disabled={!ready || selectionBusy}
+                  onChange={(event) => setCharacterInput(event.target.value)}
+                  aria-describedby="playground-character-help"
+                />
+                <button type="submit" disabled={!ready || selectionBusy}>
+                  {selectionBusy ? "Loading…" : "Explore"}
+                </button>
+              </div>
+              <p
+                id="playground-character-help"
+                role="status"
+                aria-live="polite"
+              >
+                {selectionError ||
+                  `${glyphCount?.toLocaleString() ?? "Thousands of"} glyph outlines load only when needed.`}
+              </p>
+            </form>
           </section>
 
           <fieldset className={styles.modePicker}>
