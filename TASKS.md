@@ -58,9 +58,9 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] GitHub Pages static export with project-site base path and direct-route output.
 - [x] GitHub Actions workflow builds, checks, and deploys only the static `out/` artifact.
 - [x] Remove app-controlled persistent browser storage and add a privacy notice.
-- [ ] Verify public Git history is a clean snapshot with no raw Make Me a Hanzi blobs or personal author email.
-- [ ] Change `jasonmcdowell/xiang` to public, enable Pages Actions publishing, and verify live routes/assets.
-- [ ] Publish the Xiang project card from the personal showcase source to `jasonmcdowell.github.io`.
+- [x] Verify public Git history is a clean snapshot with no raw Make Me a Hanzi blobs or personal author email.
+- [x] Change `jasonmcdowell/xiang` to public, enable Pages Actions publishing, and verify live routes/assets.
+- [x] Publish the Xiang project card from the personal showcase source to `jasonmcdowell.github.io`.
 
 ## Deferred
 

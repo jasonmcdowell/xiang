@@ -110,7 +110,7 @@ Dictionary source and license notices are served at `public/data/NOTICE.txt` and
 
 ## Deployment
 
-Xiang is prepared as a static GitHub Pages project site at <https://jasonmcdowell.github.io/xiang/>. The Actions build sets `NEXT_PUBLIC_BASE_PATH=/xiang`, exports the routes with trailing slashes, and uploads only `out/`. Local development keeps the base path empty. GitHub Free Pages requires the repository to be public; the personal showcase root remains separately published from `jasonmcdowell.github.io` and links to this project site.
+Xiang is live as a static GitHub Pages project site at <https://jasonmcdowell.github.io/xiang/>. The Actions build sets `NEXT_PUBLIC_BASE_PATH=/xiang`, exports the routes with trailing slashes, and uploads only `out/`. Local development keeps the base path empty. The project source is public at <https://github.com/jasonmcdowell/xiang>; the personal showcase at <https://jasonmcdowell.github.io/> links to this project site while its other project pages remain in place.
 
 For a local Pages-shaped production build (the symlink lets Python serve the `/xiang/` prefix):
 
