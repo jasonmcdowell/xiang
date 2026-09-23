@@ -52,6 +52,7 @@ type SceneObject = {
   free: boolean;
   recipe: Recipe | null;
   tileFollowsInkUntilRelease: boolean;
+  tileFollowOffset: Point | null;
 };
 type Contact = {
   entityId: number;
@@ -236,6 +237,7 @@ export class PlaygroundWorld {
       free,
       recipe: this.recipeByChar.get(char) ?? null,
       tileFollowsInkUntilRelease: false,
+      tileFollowOffset: null,
     };
   }
 
@@ -766,21 +768,35 @@ export class PlaygroundWorld {
     if (!preview) return;
     const source = preview.source;
     const recipe = source.recipe!;
+    const heldGroups = new Set(
+      [...this.contacts.values()]
+        .filter(
+          (contact) =>
+            contact.entityId === source.id &&
+            contact.group !== null &&
+            !contact.tileGrip,
+        )
+        .map((contact) => contact.group!),
+    );
     const made = recipe.parts.map((part, index) => {
       const { center, layout } = plan.placements[index];
       const groupBody =
         index === preview.partIndex ? preview.partBody : preview.restBody;
+      const held = heldGroups.has(index);
       return this.createObject(
         part.char,
         center,
         true,
         layout.scaleX,
         layout.scaleY,
-        groupBody.meanVelocity(),
+        held ? { x: 0, y: 0 } : groupBody.meanVelocity(),
       );
     });
     const sourceCenter = source.body.pose();
-    for (const object of made) {
+    for (const [index, object] of made.entries()) {
+      // The hand now controls this piece. A launch impulse fights the held
+      // attachment and makes its new tile orbit around the pinned strokes.
+      if (heldGroups.has(index)) continue;
       const vector = object.body.pose();
       const dx = vector.x - sourceCenter.x,
         dy = vector.y - sourceCenter.y;
@@ -801,6 +817,25 @@ export class PlaygroundWorld {
       contact.body = object.body;
       contact.binding = object.body.start(contact.target, pointerId);
       if (!contact.tileGrip) object.tileFollowsInkUntilRelease = true;
+    }
+    for (const index of heldGroups) {
+      const object = made[index];
+      const heldTargets = [...this.contacts.values()].filter(
+        (contact) => contact.entityId === object.id && !contact.tileGrip,
+      );
+      if (!heldTargets.length) continue;
+      const pointerCenter = heldTargets.reduce(
+        (center, contact) => ({
+          x: center.x + contact.target.x / heldTargets.length,
+          y: center.y + contact.target.y / heldTargets.length,
+        }),
+        { x: 0, y: 0 },
+      );
+      const tileCenter = object.surfaceBody.pose();
+      object.tileFollowOffset = {
+        x: tileCenter.x - pointerCenter.x,
+        y: tileCenter.y - pointerCenter.y,
+      };
     }
     this.preview = null;
     this.setPhase(
@@ -966,10 +1001,13 @@ export class PlaygroundWorld {
     };
     const velocityA = match.a.body.meanVelocity(),
       velocityB = match.b.body.meanVelocity();
+    const remainsFree = this.objects.some(
+      (object) => object !== match.a && object !== match.b && object.free,
+    );
     const composed = this.createObject(
       match.recipe.char,
       center,
-      false,
+      remainsFree,
       match.parentScaleX,
       match.parentScaleY,
       {
@@ -1074,24 +1112,35 @@ export class PlaygroundWorld {
       const heldInk = [...this.contacts.values()].some(
         (contact) => contact.entityId === object.id && !contact.tileGrip,
       );
-      if (object.tileFollowsInkUntilRelease && !heldInk)
+      if (object.tileFollowsInkUntilRelease && !heldInk) {
         object.tileFollowsInkUntilRelease = false;
+        object.tileFollowOffset = null;
+      }
       const aligning =
         magneticPair?.a.id === object.id || magneticPair?.b.id === object.id;
       if (this.visualStyle !== "flat" && !held && !aligning)
         object.body.restorePose(surfaceAfter, dt);
       object.body.step(dt);
       if (object.tileFollowsInkUntilRelease && heldInk) {
-        const inkPose = object.body.pose();
+        const heldTargets = [...this.contacts.values()].filter(
+          (contact) => contact.entityId === object.id && !contact.tileGrip,
+        );
+        const pointerCenter = heldTargets.reduce(
+          (center, contact) => ({
+            x: center.x + contact.target.x / heldTargets.length,
+            y: center.y + contact.target.y / heldTargets.length,
+          }),
+          { x: 0, y: 0 },
+        );
         const tilePose = object.surfaceBody.pose();
         const tileSize = this.tileDimensions(object.surfaceBody);
         const targetX = clamp(
-          inkPose.x,
+          pointerCenter.x + (object.tileFollowOffset?.x ?? 0),
           tileSize.width / 2,
           this.width - tileSize.width / 2,
         );
         const targetY = clamp(
-          inkPose.y,
+          pointerCenter.y + (object.tileFollowOffset?.y ?? 0),
           tileSize.height / 2,
           this.height - tileSize.height / 2,
         );

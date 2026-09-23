@@ -6,7 +6,22 @@
       "木",
       "木"
     ],
-    "reason": "Complete nested arrangement of three tree characters."
+    "reason": "Complete nested arrangement of three tree characters.",
+    "playground": {
+      "children": [
+        "木",
+        "林"
+      ],
+      "strokePathPrefixes": [
+        [
+          [0]
+        ],
+        [
+          [1]
+        ]
+      ],
+      "reason": "Group the lower nested 木 + 木 as 林 so the playground can recombine this character in two pairwise steps."
+    }
   },
   "品": {
     "ids": "⿱口⿰口口",

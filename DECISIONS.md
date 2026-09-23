@@ -272,8 +272,24 @@ This file records key product/engineering decisions and the intent behind them. 
 
 ## D-034 — A newly torn tile follows its held ink until release
 
-**Decision (2026-09-23):** When a tear creates a new character under an active ink drag, its tile follows that character's ink center while one or more ink contacts remain held. On the final release, the tile stops at its current position and the ink restores toward that tile.
+**Decision (2026-09-23):** When a tear creates a new character under an active ink drag, its tile follows the average position of that character's active ink pointers while preserving the tile's offset from the pointer at tear time. On the final release, the tile stops at its current position and the ink restores toward that tile.
 
 **Why:** Keeping a tile at the tear point while its character is still being dragged separates the strokes from the object too early and makes the newly created tile feel detached from the gesture.
 
-**Consequences:** A player can continue the same pull after the tear to place the tile. With multitouch, the tile follows until the last ink pointer on that new character is released; later ink drags keep the tile anchored as before.
+**Consequences:** A player can continue the same pull after the tear to place the tile without body wobble moving it while the pointer is still. With multitouch, the tile follows the mean pointer position until the last ink pointer on that new character is released; later ink drags keep the tile anchored as before.
+
+## D-035 — A held tear does not receive a launch impulse
+
+**Decision (2026-09-23):** When a tear commits under an active ink contact, initialize that held child's velocity at zero and do not apply the separation impulse to it. The other, unheld child can keep the existing release impulse. Pointer movement supplies the held child's motion; free-body launch energy must not fight the active hand attachment.
+
+**Why:** The old handoff copied the separating body's velocity and added another outward impulse while the pointer was already attached to it. The pinned stroke kept moving through the remaining lattice, and the tile followed that shifting centroid around the board until release.
+
+**Consequences:** A newly created tile follows the held pointer position at the offset where it was torn and stays calm during a stationary hold. When the last pointer releases, it keeps its position and the ink settles toward it.
+
+## D-036 — Pairwise Forest assembly in the physical playground
+
+**Decision (2026-09-23):** Keep the five-character starter board. Add 林 and 森 as selectable single-character experiments. In the physics recipe, group 森's lower nested 木 + 木 strokes as 林, so its reviewed pairwise path is 森 → 木 + 林, 林 → 木 + 木, then 木 + 木 → 林 and 林 + 木 → 森. A composed intermediate remains free while other free pieces remain, so it can take part in another valid composition. Keep the full normalized dictionary indices available to the main game; add a character to the playground only when its outline and complete component-stroke mapping have been reviewed.
+
+**Why:** The physics scene needs exact stroke paths and a clear two-object composition layout. Grouping the existing three-tree decomposition into two valid pair steps makes 林 and 森 explorable without pretending every dictionary entry is already physics-ready or expanding the five-tile starting board.
+
+**Consequences:** `data/decomposition_extensions.json` records the reviewed nested grouping used by the scene generator. The generated playground asset includes 林 and 森 outlines; starter count and layout remain unchanged. An intermediate 林 tile stays interactable while the third 木 waits to form 森.

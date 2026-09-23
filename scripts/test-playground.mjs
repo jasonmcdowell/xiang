@@ -64,8 +64,17 @@ const getFaceOverlap = (first, second) => ({
     (first.tile.height + second.tile.height) / 2 -
     Math.abs(first.tile.center.y - second.tile.center.y),
 });
-const dragTileFace = async (target, box, snapshot, character, center) => {
-  const tile = snapshot.characters.find((item) => item.char === character);
+const dragTileFace = async (
+  target,
+  box,
+  snapshot,
+  character,
+  center,
+  objectId = null,
+) => {
+  const tile = snapshot.characters.find((item) =>
+    objectId === null ? item.char === character : item.id === objectId,
+  );
   assert.ok(tile, `find ${character} tile to drag`);
   const horizontalGrip = tile.tile.width * 0.4;
   const verticalGrip = tile.tile.height * 0.4;
@@ -103,8 +112,17 @@ const dragTileFace = async (target, box, snapshot, character, center) => {
   for (let i = 0; i < 6; i++) await advance(target, 1000 / 60);
   return state(target);
 };
-const moveHeldTileFace = async (target, box, snapshot, character, center) => {
-  const tile = snapshot.characters.find((item) => item.char === character);
+const moveHeldTileFace = async (
+  target,
+  box,
+  snapshot,
+  character,
+  center,
+  objectId = null,
+) => {
+  const tile = snapshot.characters.find((item) =>
+    objectId === null ? item.char === character : item.id === objectId,
+  );
   const contact = snapshot.activeContacts.find(
     (item) => item.character === character && item.interaction === "tile",
   );
@@ -154,6 +172,85 @@ const dragInkToPoint = async (
   }
   for (let i = 0; i < 6; i++) await advance(target, 1000 / 60);
   return state(target);
+};
+const tearComponent = async (target, box, snapshot, character, part) => {
+  const parent = snapshot.characters.find(
+    (object) => object.char === character,
+  );
+  assert.ok(parent && snapshot.componentGrabPoints?.[part]?.length);
+  const start = snapshot.componentGrabPoints[part][0];
+  let dx = start.x - parent.center.x;
+  let dy = start.y - parent.center.y;
+  const length = Math.hypot(dx, dy) || 1;
+  dx = (dx / length) * 8;
+  dy = (dy / length) * 8;
+  const origin = screenPoint(box, start);
+  await target.mouse.move(origin.x, origin.y);
+  await target.mouse.down();
+  let current = snapshot;
+  let stretched = false;
+  for (let i = 1; i <= 90 && !(stretched && current.phase === "loose"); i++) {
+    await target.mouse.move(origin.x + dx * i, origin.y + dy * i);
+    await advance(target, 1000 / 60);
+    current = await state(target);
+    stretched ||= current.phase === "stretching";
+  }
+  assert.ok(stretched, `start a tear of ${part} from ${character}`);
+  assert.equal(
+    current.phase,
+    "loose",
+    `finish a tear of ${part} from ${character}`,
+  );
+  return current;
+};
+const guideHeldTileToMagnet = async (
+  target,
+  box,
+  snapshot,
+  movingId,
+  parent,
+) => {
+  let current = snapshot;
+  for (let i = 0; i < 100; i++) {
+    if (current.characters.some((object) => object.char === parent))
+      return current;
+    const moving = current.characters.find((object) => object.id === movingId);
+    const magnet = current.magnet;
+    if (!moving || !magnet.active) return current;
+    const fromDistance = Math.hypot(
+      moving.inkCenter.x - magnet.from.x,
+      moving.inkCenter.y - magnet.from.y,
+    );
+    const source =
+      fromDistance <
+      Math.hypot(
+        moving.inkCenter.x - magnet.to.x,
+        moving.inkCenter.y - magnet.to.y,
+      )
+        ? magnet.from
+        : magnet.to;
+    const destination =
+      source === magnet.from ? magnet.targetFrom : magnet.targetTo;
+    const dx = destination.x - source.x;
+    const dy = destination.y - source.y;
+    if (Math.hypot(dx, dy) < 2) {
+      await advance(target, 1000 / 60);
+      current = await state(target);
+      continue;
+    }
+    current = await moveHeldTileFace(
+      target,
+      box,
+      current,
+      moving.char,
+      {
+        x: moving.tile.center.x + dx * 0.45,
+        y: moving.tile.center.y + dy * 0.45,
+      },
+      movingId,
+    );
+  }
+  return current;
 };
 const guideHeldHeartIntoPlace = async (target, box, initialState) => {
   let current = initialState;
@@ -227,10 +324,31 @@ try {
   assertUniformTiles(current.characters, "five starter board");
   assert.equal(current.characters[0].tile.width, 156);
   assert.deepEqual(
-    ["想", "相", "明", "休", "好"].map((char) => char),
+    ["想", "相", "明", "休", "好", "林", "森"].map((char) => char),
     await page
-      .getByRole("button", { name: /^[想相明休好]$/ })
+      .getByRole("button", { name: /^[想相明休好林森]$/ })
       .allTextContents(),
+  );
+  await page.getByRole("button", { name: "林", exact: true }).click();
+  current = await state();
+  assert.deepEqual(
+    current.characters.map((object) => object.char),
+    ["林"],
+  );
+  await page.getByRole("button", { name: "森", exact: true }).click();
+  current = await state();
+  assert.deepEqual(
+    current.characters.map((object) => object.char),
+    ["森"],
+  );
+  assert.ok(current.componentGrabPoints["木"]?.length);
+  assert.ok(current.componentGrabPoints["林"]?.length);
+  await page.getByRole("button", { name: "Five starters" }).click();
+  current = await state();
+  assert.deepEqual(
+    current.characters.map((object) => object.char),
+    ["想", "相", "明", "休", "好"],
+    "the new single-character experiments preserve the five-tile starter board",
   );
   const canvas = page.locator("canvas");
   let box = await canvas.boundingBox();
@@ -284,6 +402,26 @@ try {
       heldHeart.inkCenter.y - inkCenterAtTear.y,
     ) > 12,
     "the held strokes continue moving after the tear",
+  );
+  const stationaryTileStart = { ...heldHeart.tile.center };
+  let maximumStationaryTileDrift = 0;
+  for (let i = 0; i < 60; i++) {
+    await advance(page, 1000 / 60);
+    current = await state();
+    const stationaryHeart = current.characters.find(
+      (object) => object.char === "心",
+    );
+    maximumStationaryTileDrift = Math.max(
+      maximumStationaryTileDrift,
+      Math.hypot(
+        stationaryHeart.tile.center.x - stationaryTileStart.x,
+        stationaryHeart.tile.center.y - stationaryTileStart.y,
+      ),
+    );
+  }
+  assert.ok(
+    maximumStationaryTileDrift < 32,
+    `the tile stays calm during a stationary hold (max drift ${maximumStationaryTileDrift.toFixed(1)}px)`,
   );
   await page.screenshot({
     path: "output/playground/five-starter-tear.png",
@@ -561,7 +699,7 @@ try {
     x: nestedEye.tile.center.x - 88,
     y: nestedEye.tile.center.y,
   });
-  if (current.magnet.active) {
+  if (current.magnet.active && current.magnet.parent === "相") {
     assert.ok(
       current.magnet.targetFrom.x < current.magnet.targetTo.x,
       "the overlapping faces preserve the horizontal 相 layout",
@@ -1120,6 +1258,103 @@ try {
   await mobile.setViewportSize({ width: 500, height: 750 });
   await mobile.waitForTimeout(100);
   assert.equal((await state(mobile)).contactCount, 0);
+
+  // Build 森 from 木 pieces through the reviewed pairwise 林 recipe.
+  const woodLab = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  woodLab.on("pageerror", (error) => errors.push(error.message));
+  woodLab.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await load(woodLab);
+  await woodLab.getByRole("button", { name: "森", exact: true }).click();
+  const woodBox = await woodLab.locator("canvas").boundingBox();
+  let woodState = await state(woodLab);
+  woodState = await tearComponent(woodLab, woodBox, woodState, "森", "木");
+  assert.deepEqual(
+    woodState.characters.map((object) => object.char),
+    ["木", "林"],
+    "森 tears into 木 and the nested 林 group",
+  );
+  await woodLab.mouse.up();
+  woodState = await state(woodLab);
+  woodState = await tearComponent(woodLab, woodBox, woodState, "林", "木");
+  assert.deepEqual(
+    woodState.characters.map((object) => object.char).sort(),
+    ["木", "木", "木"],
+    "林 tears into its two mapped 木 components",
+  );
+  assertNoTileOverlap(woodState.characters, "three tree pieces");
+  await woodLab.mouse.up();
+  woodState = await state(woodLab);
+  const lowerWoods = woodState.characters
+    .filter((object) => object.char === "木")
+    .sort((a, b) => b.tile.center.y - a.tile.center.y)
+    .slice(0, 2)
+    .sort((a, b) => a.tile.center.x - b.tile.center.x);
+  assert.equal(lowerWoods.length, 2);
+  const leftWood = lowerWoods[0];
+  const rightWood = lowerWoods[1];
+  woodState = await dragTileFace(
+    woodLab,
+    woodBox,
+    woodState,
+    "木",
+    {
+      x: leftWood.tile.center.x + 88,
+      y: leftWood.tile.center.y,
+    },
+    rightWood.id,
+  );
+  if (!woodState.characters.some((object) => object.char === "林")) {
+    assert.equal(woodState.magnet.active, true);
+    assert.equal(woodState.magnet.parent, "林");
+    woodState = await guideHeldTileToMagnet(
+      woodLab,
+      woodBox,
+      woodState,
+      rightWood.id,
+      "林",
+    );
+  }
+  assert.ok(
+    woodState.characters.some((object) => object.char === "林"),
+    "the two lower 木 tiles recombine as 林",
+  );
+  await woodLab.mouse.up();
+  woodState = await state(woodLab);
+  const topWood = woodState.characters.find((object) => object.char === "木");
+  const lowerLin = woodState.characters.find((object) => object.char === "林");
+  assert.ok(topWood && lowerLin);
+  woodState = await dragTileFace(
+    woodLab,
+    woodBox,
+    woodState,
+    "林",
+    {
+      x: topWood.tile.center.x,
+      y: topWood.tile.center.y + 88,
+    },
+    lowerLin.id,
+  );
+  if (!woodState.characters.some((object) => object.char === "森")) {
+    assert.equal(woodState.magnet.active, true);
+    assert.equal(woodState.magnet.parent, "森");
+    woodState = await guideHeldTileToMagnet(
+      woodLab,
+      woodBox,
+      woodState,
+      lowerLin.id,
+      "森",
+    );
+  }
+  assert.ok(
+    woodState.characters.some((object) => object.char === "森"),
+    "林 + 木 recombine as 森",
+  );
+  await woodLab.mouse.up();
+  await woodLab.close();
 
   // Failed scene data has a retry path.
   const failure = await browser.newPage();

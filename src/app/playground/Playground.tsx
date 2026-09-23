@@ -20,7 +20,7 @@ type Status = {
   boardPreset: "starters" | "single";
   tileCount: number;
 };
-const samples = ["想", "相", "明", "休", "好"];
+const samples = ["想", "相", "明", "休", "好", "林", "森"];
 
 export default function Playground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -410,7 +410,7 @@ export default function Playground() {
               ref={canvasRef}
               tabIndex={0}
               role="application"
-              aria-label={`Physical ${status.boardPreset === "starters" ? "five starter characters" : status.character} playground in ${visualStyle} surface style. Drag visible ink to pull a component while its tile stays in place. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.`}
+              aria-label={`Physical ${status.boardPreset === "starters" ? "five starter characters" : status.character} playground in ${visualStyle} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.`}
               aria-describedby="playground-keys"
             />
             {!ready && (
