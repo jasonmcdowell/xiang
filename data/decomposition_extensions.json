@@ -1,0 +1,146 @@
+{
+  "森": {
+    "ids": "⿱木⿰木木",
+    "children": [
+      "木",
+      "木",
+      "木"
+    ],
+    "reason": "Complete nested arrangement of three tree characters."
+  },
+  "品": {
+    "ids": "⿱口⿰口口",
+    "children": [
+      "口",
+      "口",
+      "口"
+    ],
+    "reason": "Complete nested arrangement of three mouth characters."
+  },
+  "晶": {
+    "ids": "⿱日⿰日日",
+    "children": [
+      "日",
+      "日",
+      "日"
+    ],
+    "reason": "Complete nested arrangement of three sun characters."
+  },
+  "众": {
+    "ids": "⿱人⿰人人",
+    "children": [
+      "人",
+      "人",
+      "人"
+    ],
+    "reason": "Complete nested arrangement of three person characters."
+  },
+  "焱": {
+    "ids": "⿱火⿰火火",
+    "children": [
+      "火",
+      "火",
+      "火"
+    ],
+    "reason": "Complete nested arrangement of three fire characters."
+  },
+  "磊": {
+    "ids": "⿱石⿰石石",
+    "children": [
+      "石",
+      "石",
+      "石"
+    ],
+    "reason": "Complete nested arrangement of three stone characters."
+  },
+  "淼": {
+    "ids": "⿱水⿰水水",
+    "children": [
+      "水",
+      "水",
+      "水"
+    ],
+    "reason": "Complete nested arrangement of three water characters."
+  },
+  "鑫": {
+    "ids": "⿱金⿰金金",
+    "children": [
+      "金",
+      "金",
+      "金"
+    ],
+    "reason": "Complete nested arrangement of three metal characters."
+  },
+  "亲": {
+    "ids": "⿱立⿻一小",
+    "children": [
+      "立",
+      "一",
+      "小"
+    ],
+    "reason": "Complete nested top-and-overlap arrangement; no leaf is omitted."
+  },
+  "具": {
+    "ids": "⿱目⿱一八",
+    "children": [
+      "目",
+      "一",
+      "八"
+    ],
+    "reason": "Complete nested vertical arrangement of eye, one, and eight."
+  },
+  "婴": {
+    "ids": "⿱⿰贝贝女",
+    "children": [
+      "贝",
+      "贝",
+      "女"
+    ],
+    "reason": "Complete nested arrangement with two shell characters above woman."
+  },
+  "拖": {
+    "ids": "⿰扌⿱亻也",
+    "children": [
+      "手",
+      "人",
+      "也"
+    ],
+    "reason": "Complete nested arrangement, using the existing hand and person normalization rules."
+  },
+  "沿": {
+    "ids": "⿰氵⿱几口",
+    "children": [
+      "水",
+      "几",
+      "口"
+    ],
+    "reason": "Complete nested arrangement, using the existing water normalization rule."
+  },
+  "谷": {
+    "ids": "⿱八⿱人口",
+    "children": [
+      "八",
+      "人",
+      "口"
+    ],
+    "reason": "Complete nested vertical arrangement of eight, person, and mouth."
+  },
+  "贵": {
+    "ids": "⿱⿱中一贝",
+    "children": [
+      "中",
+      "一",
+      "贝"
+    ],
+    "reason": "Complete nested vertical arrangement of middle, one, and shell."
+  },
+  "轻": {
+    "ids": "⿰车⿱又工",
+    "children": [
+      "车",
+      "又",
+      "工"
+    ],
+    "reason": "Complete nested arrangement of vehicle, again, and work."
+  }
+}

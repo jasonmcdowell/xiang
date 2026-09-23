@@ -1,0 +1,41 @@
+{
+  "name": "xiang",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint",
+    "build:data": "node scripts/build_indices.js",
+    "build:playground": "node scripts/build-playground.mjs",
+    "build:charlists": "node scripts/extract_hsk_charlists.js",
+    "build:pools": "node scripts/build_dense_pool.js --charlist public/data/charlists/hsk1_simp.txt --name hsk1_simp && node scripts/build_dense_pool.js --charlist public/data/charlists/hsk1_trad.txt --name hsk1_trad && node scripts/build_dense_pool.js --charlist public/data/charlists/hsk12_simp.txt --name hsk12_simp && node scripts/build_dense_pool.js --charlist public/data/charlists/hsk12_trad.txt --name hsk12_trad",
+    "build:chid-scrambles": "node scripts/build_chid_scrambles.js --expand-depth2-k 2",
+    "build:chid-scrambles:deep": "node scripts/build_chid_scrambles.js --expand-depth2-k 4 --max-len 6",
+    "build:game-data": "npm run build:data && npm run build:charlists && npm run build:pools && npm run build:chid-scrambles",
+    "test": "tsx --test tests/*.test.cjs tests/*.test.ts",
+    "test:browser": "node scripts/test-browser.mjs",
+    "test:motion": "node scripts/test-motion.mjs",
+    "test:recipes": "node scripts/test-recipes.mjs",
+    "test:drag": "node scripts/test-drag.mjs",
+    "test:playground": "node scripts/test-playground.mjs"
+  },
+  "dependencies": {
+    "next": "^16.3.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^16.3.4",
+    "playwright": "^1.63.0",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  }
+}
