@@ -449,7 +449,7 @@ export default function Playground() {
           ref={canvasRef}
           tabIndex={0}
           role="application"
-          aria-label={`Physical ${status.character} playground in ${visualStyle} surface style. Raised and Draped tiles are the same size. Drag visible ink to pull a component while the tile stays in place. Drag the blank tile face to move the whole character in Weighted mode. Overlap compatible tile faces to let the strokes drift into place and snap together.`}
+          aria-label={`Physical ${status.character} playground in ${visualStyle} surface style. Raised and Draped tiles are the same size. Drag visible ink to pull a component while the tile stays in place. Drag the blank tile face to move the whole character in Weighted mode. Overlap compatible tiles, or hold ink over the compatible tile while the strokes drift into place and snap together.`}
           aria-describedby="playground-keys"
         />
         {!ready && (
@@ -518,8 +518,8 @@ export default function Playground() {
           Raised and Draped tiles are the same size. Pull ink until the child
           tile has room beside its sibling; the parent tile stays in place. Drag
           a blank area of the face to move the whole character in Weighted mode.
-          Overlap compatible tile faces in the correct layout to let their
-          strokes drift together and snap.{" "}
+          Overlap compatible tile faces, or hold ink over the compatible tile
+          while strokes drift into place and snap.{" "}
           <span>
             Keyboard: arrows to nudge · R to reset · F for fullscreen · Escape
             to release

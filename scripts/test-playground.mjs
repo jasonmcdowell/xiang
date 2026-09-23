@@ -119,6 +119,58 @@ const moveHeldTileFace = async (target, box, snapshot, character, center) => {
   for (let i = 0; i < 6; i++) await advance(target, 1000 / 60);
   return state(target);
 };
+const dragInkToPoint = async (
+  target,
+  box,
+  snapshot,
+  character,
+  destination,
+) => {
+  const object = snapshot.characters.find((item) => item.char === character);
+  assert.ok(object?.grabPoints.length, `find ${character} ink to drag`);
+  const start = object.grabPoints[0];
+  const distance = Math.hypot(destination.x - start.x, destination.y - start.y);
+  const steps = Math.max(4, Math.ceil(distance / 12));
+  await target.mouse.move(box.x + start.x, box.y + start.y);
+  await target.mouse.down();
+  const grabbed = await state(target);
+  assert.equal(grabbed.activeContacts[0]?.character, character);
+  assert.equal(grabbed.activeContacts[0]?.interaction, "ink");
+  for (let i = 1; i <= steps; i++) {
+    const amount = i / steps;
+    await target.mouse.move(
+      box.x + start.x + (destination.x - start.x) * amount,
+      box.y + start.y + (destination.y - start.y) * amount,
+    );
+    await advance(target, 1000 / 60);
+  }
+  for (let i = 0; i < 6; i++) await advance(target, 1000 / 60);
+  return state(target);
+};
+const guideHeldHeartIntoPlace = async (target, box, initialState) => {
+  let current = initialState;
+  for (let i = 0; i < 300; i++) {
+    if (current.characters.some((object) => object.char === "想"))
+      return current;
+    const magnet = current.magnet;
+    const contact = current.activeContacts.find(
+      (item) => item.character === "心" && item.interaction === "ink",
+    );
+    if (magnet.active && contact) {
+      const dx = magnet.targetTo.x - magnet.to.x;
+      const dy = magnet.targetTo.y - magnet.to.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const distance = Math.min(8, length * 0.24);
+      await target.mouse.move(
+        box.x + contact.target.x + (dx / length) * distance,
+        box.y + contact.target.y + (dy / length) * distance,
+      );
+    }
+    await advance(target, 1000 / 60);
+    current = await state(target);
+  }
+  return current;
+};
 const drag = async (target, box, start, movements, dx, dy = 0) => {
   const origin = screenPoint(box, start);
   await target.mouse.move(origin.x, origin.y);
@@ -418,6 +470,76 @@ try {
     fullPage: true,
   });
   await page.mouse.up();
+
+  // Ink can contact the sibling tile and recompose without moving its own tile.
+  const inkReassembly = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  inkReassembly.on("pageerror", (error) => errors.push(error.message));
+  inkReassembly.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await load(inkReassembly);
+  let inkState = await state(inkReassembly);
+  const inkCanvas = inkReassembly.locator("canvas");
+  const inkBox = await inkCanvas.boundingBox();
+  const tearOrigin = screenPoint(inkBox, inkState.componentGrabPoints["相"][4]);
+  await inkReassembly.mouse.move(tearOrigin.x, tearOrigin.y);
+  await inkReassembly.mouse.down();
+  for (let i = 1; i <= 35 && inkState.characters.length === 1; i++) {
+    await inkReassembly.mouse.move(tearOrigin.x + i * 9, tearOrigin.y - i);
+    await advance(inkReassembly, 1000 / 60);
+    inkState = await state(inkReassembly);
+  }
+  assert.deepEqual(
+    inkState.characters.map((object) => object.char),
+    ["相", "心"],
+  );
+  assert.match(inkState.message, /hold one piece's ink over the other tile/);
+  await inkReassembly.mouse.up();
+  inkState = await state(inkReassembly);
+  const reassemblyXiangTile = inkState.characters.find(
+    (object) => object.char === "相",
+  ).tile;
+  const heartTileBefore = inkState.characters.find(
+    (object) => object.char === "心",
+  ).tile;
+  const beforeInkOverlap = getFaceOverlap(
+    inkState.characters.find((object) => object.char === "相"),
+    inkState.characters.find((object) => object.char === "心"),
+  );
+  assert.ok(
+    beforeInkOverlap.x <= 0 || beforeInkOverlap.y <= 0,
+    "the sibling tile faces remain separate before the ink drag",
+  );
+  inkState = await dragInkToPoint(inkReassembly, inkBox, inkState, "心", {
+    x: reassemblyXiangTile.center.x,
+    y: reassemblyXiangTile.center.y + 50,
+  });
+  assert.equal(
+    inkState.magnet.active,
+    true,
+    "dragged 心 ink contacting 相's tile engages recombination",
+  );
+  assert.equal(inkState.magnet.contact, "ink");
+  assert.equal(inkState.magnet.tileOverlap, null);
+  await inkReassembly.screenshot({
+    path: "output/playground/ink-contact-magnet.png",
+    fullPage: true,
+  });
+  assert.equal(
+    inkState.characters.find((object) => object.char === "心").tile.center.x,
+    heartTileBefore.center.x,
+    "the source tile stays anchored during an ink-led recombination",
+  );
+  inkState = await guideHeldHeartIntoPlace(inkReassembly, inkBox, inkState);
+  assert.deepEqual(
+    inkState.characters.map((object) => object.char),
+    ["想"],
+    "dragging 心 strokes onto 相 guides them into 想 without moving its tile",
+  );
+  await inkReassembly.mouse.up();
+  await inkReassembly.close();
 
   // Horizontal 相 also waits until both tile faces can clear one another.
   await page.getByRole("button", { name: "相", exact: true }).click();
@@ -859,7 +981,7 @@ try {
   await page.getByRole("button", { name: "Split 想", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Playground passed: flat/raised/draped rendering and hit testing, fixed and weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile-overlap-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
+    "Playground passed: flat/raised/draped rendering and hit testing, fixed and weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
   );
 } finally {
   await browser.close();

@@ -254,3 +254,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** Component pull should be grounded in a visible physical contact between the tiles. Players must move the tiles into contact before the strokes respond.
 
 **Consequences:** Newly separated pieces no longer attract automatically. Players first drag a blank tile face until compatible faces overlap; the strokes then bend or drift together, with more force as the faces overlap further and the strokes approach their target.
+
+## D-032 — Dragged ink can make direct contact with a compatible tile
+**Decision (2026-09-23):** Preserve D-031's tile-overlap gate for free, unattended pieces. Also allow an actively held ink stroke to engage a compatible free piece when the pointer enters that piece's tile face. The held ink's penetration into the target face controls the initial tug; stroke alignment still determines the composition layout and snap. The source tile remains anchored during ink drags. Dragging the blank face continues to move the whole tile and uses tile-face overlap as before.
+
+**Why:** With the source tile anchored, a one-finger ink drag cannot move that tile into overlap. Requiring tile overlap alone made stroke-led recombination impossible unless a second contact moved the source tile.
+
+**Consequences:** Players can recombine with one hand by dragging the component's ink onto its compatible tile and guiding the strokes into alignment. A merely nearby drag or a separated, unattended pair still exerts no magnetic pull.

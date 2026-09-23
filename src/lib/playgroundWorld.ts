@@ -74,6 +74,7 @@ type MagnetMatch = {
   recipe: Recipe;
   a: SceneObject;
   b: SceneObject;
+  contactKind: "tiles" | "ink";
   layoutA: ComponentLayout;
   layoutB: ComponentLayout;
   anchorA: Point;
@@ -600,6 +601,31 @@ export class PlaygroundWorld {
       : null;
   }
 
+  private heldInkOnFace(source: SceneObject, target: SceneObject) {
+    const targetPose = target.surfaceBody.pose();
+    const targetSize = this.tileDimensions(target.surfaceBody);
+    const halfWidth = targetSize.width / 2;
+    const halfHeight = targetSize.height / 2;
+    const cos = Math.cos(targetPose.angle);
+    const sin = Math.sin(targetPose.angle);
+    for (const contact of this.contacts.values()) {
+      if (contact.entityId !== source.id || contact.tileGrip) continue;
+      const dx = contact.target.x - targetPose.x;
+      const dy = contact.target.y - targetPose.y;
+      const localX = cos * dx + sin * dy;
+      const localY = -sin * dx + cos * dy;
+      const overlapX = halfWidth - Math.abs(localX);
+      const overlapY = halfHeight - Math.abs(localY);
+      if (overlapX > TILE_OVERLAP_EPSILON && overlapY > TILE_OVERLAP_EPSILON)
+        return {
+          x: overlapX,
+          y: overlapY,
+          depth: Math.min(overlapX, overlapY),
+        };
+    }
+    return null;
+  }
+
   private facesClear(
     centerA: Point,
     faceA: { width: number; height: number },
@@ -715,7 +741,7 @@ export class PlaygroundWorld {
     this.preview = null;
     this.setPhase(
       "loose",
-      `Free pieces: ${recipe.parts[0].char} + ${recipe.parts[1].char}. Overlap their tile faces to let the strokes drift into place.`,
+      `Free pieces: ${recipe.parts[0].char} + ${recipe.parts[1].char}. Overlap the tiles or hold one piece's ink over the other tile to recombine.`,
     );
   }
 
@@ -727,8 +753,7 @@ export class PlaygroundWorld {
       for (let j = i + 1; j < this.objects.length; j++) {
         const b = this.objects[j];
         if (!b.free) continue;
-        const overlap = this.tileOverlap(a.surfaceBody, b.surfaceBody);
-        if (!overlap) continue;
+        const tileOverlap = this.tileOverlap(a.surfaceBody, b.surfaceBody);
         for (const recipe of this.recipes) {
           const first = recipe.parts[0].char,
             second = recipe.parts[1].char;
@@ -738,6 +763,11 @@ export class PlaygroundWorld {
           } else if (a.char === second && b.char === first) {
             [partA, partB] = [recipe.parts[1], recipe.parts[0]];
           } else continue;
+          const inkOverlap = tileOverlap
+            ? null
+            : (this.heldInkOnFace(a, b) ?? this.heldInkOnFace(b, a));
+          if (!tileOverlap && !inkOverlap) continue;
+          const overlap = tileOverlap ?? inkOverlap!;
           const baseLayoutA = partA.layout,
             baseLayoutB = partB.layout,
             parentScaleX =
@@ -789,6 +819,7 @@ export class PlaygroundWorld {
               recipe,
               a,
               b,
+              contactKind: tileOverlap ? "tiles" : "ink",
               layoutA,
               layoutB,
               anchorA,
@@ -837,6 +868,7 @@ export class PlaygroundWorld {
     return {
       from: match.anchorA,
       to: match.anchorB,
+      contact: match.contactKind,
       targetFrom: {
         x: centerX + match.layoutA.parentOffset.x,
         y: centerY + match.layoutA.parentOffset.y,
@@ -1142,7 +1174,9 @@ export class PlaygroundWorld {
             parent: magnetMatch?.recipe.char ?? null,
             distance: magnet.distance,
             strength: magnet.strength,
-            tileOverlap: magnet.overlap,
+            contact: magnet.contact,
+            contactOverlap: magnet.overlap,
+            tileOverlap: magnet.contact === "tiles" ? magnet.overlap : null,
             parentScale: {
               x: magnetMatch?.parentScaleX ?? 1,
               y: magnetMatch?.parentScaleY ?? 1,
