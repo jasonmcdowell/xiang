@@ -869,14 +869,18 @@ export class PlaygroundWorld {
           const overlap = tileOverlap ?? inkOverlap!;
           const baseLayoutA = partA.layout,
             baseLayoutB = partB.layout,
-            parentScaleX =
-              (a.body.scaleX / baseLayoutA.scaleX +
-                b.body.scaleX / baseLayoutB.scaleX) /
-              2,
-            parentScaleY =
-              (a.body.scaleY / baseLayoutA.scaleY +
-                b.body.scaleY / baseLayoutB.scaleY) /
-              2,
+            // Choose the largest scale supported by both pieces, without
+            // letting independently full-size pieces inflate their parent.
+            parentScaleX = Math.min(
+              DEFAULT_GLYPH_SCALE,
+              a.body.scaleX / baseLayoutA.scaleX,
+              b.body.scaleX / baseLayoutB.scaleX,
+            ),
+            parentScaleY = Math.min(
+              DEFAULT_GLYPH_SCALE,
+              a.body.scaleY / baseLayoutA.scaleY,
+              b.body.scaleY / baseLayoutB.scaleY,
+            ),
             layoutA = {
               ...baseLayoutA,
               parentOffset: {

@@ -300,3 +300,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** A tear preview is a temporary view of one character splitting; it should not hide unrelated objects in the playground.
 
 **Consequences:** The existing characters remain visible throughout a drag, while the two child groups continue sharing the source tile face until the tear commits. The browser test checks the rendered-layer character list during a five-tile tear.
+
+## D-038 — Normalize composed characters to the smaller compatible scale
+**Decision (2026-09-23):** Infer a composed character's scale from both components' current size relative to their reviewed embedded layout. Use the smaller inferred parent scale and cap it at the standard playground glyph scale (0.36), independently for each axis.
+
+**Why:** Components can arrive at different sizes, especially when a full-size intermediate character is combined with a smaller piece torn from a larger character. Averaging inferred sizes enlarged the result beyond its tile. The smaller scale fits both pieces without stretching either one, while the cap keeps independently composed characters at the same maximum ink size as starting characters.
+
+**Consequences:** Recombining children torn from a standard-size parent restores that scale. Recombining a full-size intermediate with an embedded smaller component shrinks the result to fit the standard tile instead of allowing its strokes to spill beyond the face. The 森 browser flow checks scale after its pairwise reconstruction.

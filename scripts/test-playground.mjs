@@ -1368,6 +1368,19 @@ try {
     woodState.characters.some((object) => object.char === "森"),
     "林 + 木 recombine as 森",
   );
+  const assembledForest = woodState.characters.find(
+    (object) => object.char === "森",
+  );
+  assert.equal(woodState.characters.length, 1, "森 is one assembled tile");
+  assert.ok(
+    Math.abs(assembledForest.scale.x - 0.36) < 0.02 &&
+      Math.abs(assembledForest.scale.y - 0.36) < 0.02,
+    `reassembled 森 returns to its standard tile scale, got ${JSON.stringify(assembledForest.scale)}`,
+  );
+  await woodLab.screenshot({
+    path: "output/playground/forest-size-normalized.png",
+    fullPage: true,
+  });
   await woodLab.mouse.up();
   await woodLab.close();
 
