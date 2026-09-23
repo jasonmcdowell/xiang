@@ -343,6 +343,40 @@ try {
       .allTextContents(),
   );
   await page.getByLabel("Any dictionary character").fill("信");
+  await page.getByRole("button", { name: "Add to board" }).click();
+  await page.waitForFunction(
+    () =>
+      JSON.parse(window.render_game_to_text()).boardPreset === "custom" &&
+      JSON.parse(window.render_game_to_text()).characters.length === 6,
+  );
+  current = await state();
+  assert.deepEqual(
+    current.characters.map((object) => object.char).sort(),
+    ["休", "好", "信", "想", "明", "相"].sort(),
+    "adding a dictionary character preserves the existing starter board",
+  );
+  assertNoTileOverlap(current.characters, "custom six-character board");
+  assert.ok(
+    glyphRequests.has("4FE1"),
+    "fetch an added character outline on demand",
+  );
+  assert.ok(
+    glyphRequests.has("8A00"),
+    "fetch the added character's child outline",
+  );
+  await page.getByRole("button", { name: "Reset" }).click();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).characters.length === 6,
+  );
+  current = await state();
+  assert.equal(current.boardPreset, "custom");
+  assert.deepEqual(
+    current.characters.map((object) => object.char).sort(),
+    ["休", "好", "信", "想", "明", "相"].sort(),
+    "reset restores the custom board's original characters",
+  );
+
+  await page.getByLabel("Any dictionary character").fill("信");
   await page.getByRole("button", { name: "Explore" }).click();
   await page.waitForFunction(
     () => JSON.parse(window.render_game_to_text()).character === "信",
@@ -1222,6 +1256,20 @@ try {
   let mobileState = await state(mobile);
   assert.equal(mobileState.characters.length, 5);
   assertNoTileOverlap(mobileState.characters, "mobile five starter board");
+  await mobile.getByLabel("Any dictionary character").fill("信");
+  await mobile.getByRole("button", { name: "Add to board" }).click();
+  await mobile.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).characters.length === 6,
+  );
+  mobileState = await state(mobile);
+  assert.ok(mobileState.characters.some((object) => object.char === "信"));
+  assertNoTileOverlap(mobileState.characters, "mobile custom board");
+  await mobile.screenshot({
+    path: "output/playground/custom-board-mobile.png",
+    fullPage: true,
+  });
+  await mobile.getByRole("button", { name: "Five starters" }).click();
+  assert.equal((await state(mobile)).characters.length, 5);
   await mobile.getByRole("button", { name: "想", exact: true }).click();
   assert.equal((await state(mobile)).reducedMotion, true);
   await mobile.getByLabel("Reduce motion").uncheck();

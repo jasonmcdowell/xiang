@@ -55,6 +55,8 @@ type SceneObject = {
   tileFollowsInkUntilRelease: boolean;
   tileFollowOffset: Point | null;
 };
+
+type StartingTile = { char: string; center: Point };
 type Contact = {
   entityId: number;
   group: number | null;
@@ -125,6 +127,7 @@ export class PlaygroundWorld {
   private recipes: Recipe[] = [];
   private recipeByChar = new Map<string, Recipe>();
   private objects: SceneObject[] = [];
+  private customStarts: StartingTile[] | null = null;
   private preview: TearPreview | null = null;
   private contacts = new Map<number, Contact>();
   private nextId = 1;
@@ -133,7 +136,7 @@ export class PlaygroundWorld {
   phase: "whole" | "stretching" | "loose" = "whole";
   message = "Pull a component outward. Stretch its seam to tear it free.";
   selectedCharacter = "想";
-  boardPreset: "starters" | "single" = "starters";
+  boardPreset: "starters" | "single" | "custom" = "starters";
   physicsMode: PhysicsMode = "fixed";
   visualStyle: VisualStyle = "raised";
   softness = 0.55;
@@ -358,8 +361,17 @@ export class PlaygroundWorld {
       this.resetStarters();
       return;
     }
+    if (
+      char === undefined &&
+      this.boardPreset === "custom" &&
+      this.customStarts?.length
+    ) {
+      this.resetCustomBoard();
+      return;
+    }
     this.cancelAll();
     this.boardPreset = "single";
+    this.customStarts = null;
     this.selectedCharacter = char ?? this.selectedCharacter;
     if (!this.assets.glyphs[this.selectedCharacter])
       throw new Error(
@@ -381,9 +393,127 @@ export class PlaygroundWorld {
     );
   }
 
+  addCharacter(char: string): "added" | "busy" | "full" {
+    if (this.contacts.size || this.preview) {
+      this.message = "Finish the current drag before adding a character.";
+      return "busy";
+    }
+    if (!this.assets.glyphs[char])
+      throw new Error(`Missing playground glyph for ${char}.`);
+    const center = this.findOpenTileCenter();
+    if (!center) {
+      this.message =
+        "There isn’t room for another tile. Move a tile and try again.";
+      return "full";
+    }
+    if (this.boardPreset !== "custom")
+      this.customStarts = this.objects.map((object) => ({
+        char: object.char,
+        center: { ...object.surfaceBody.pose() },
+      }));
+    this.customStarts ??= [];
+    this.customStarts.push({ char, center: { ...center } });
+    this.boardPreset = "custom";
+    this.selectedCharacter = char;
+    this.objects.push(this.createObject(char, center, false));
+    this.message = this.recipeByChar.has(char)
+      ? `${char} added as a new tile. Pull a component or combine it with another character.`
+      : `${char} added as a new tile. It has an outline but no complete physical component mapping.`;
+    return "added";
+  }
+
+  private findOpenTileCenter(): Point | null {
+    const halfSize = TILE_FACE_SIZE / 2;
+    const margin = halfSize + 8;
+    if (this.width < margin * 2 || this.height < margin * 2) return null;
+
+    const occupied = this.objects.map((object) => ({
+      center: object.surfaceBody.pose(),
+      footprint: this.tileFootprint(object.surfaceBody),
+    }));
+    const candidateCoordinates = (
+      size: number,
+      extent: "width" | "height",
+      axis: "x" | "y",
+    ) => {
+      const minimum = margin;
+      const maximum = size - margin;
+      const coordinates = new Set<number>([size / 2, minimum, maximum]);
+      for (const item of occupied) {
+        const separation =
+          halfSize + item.footprint[extent] / 2 + TILE_CLEARANCE;
+        coordinates.add(
+          clamp(item.center[axis] - separation, minimum, maximum),
+        );
+        coordinates.add(
+          clamp(item.center[axis] + separation, minimum, maximum),
+        );
+      }
+      return [...coordinates].sort(
+        (a, b) => Math.abs(a - size / 2) - Math.abs(b - size / 2),
+      );
+    };
+    const xs = candidateCoordinates(this.width, "width", "x");
+    const ys = candidateCoordinates(this.height, "height", "y");
+    const candidates = xs.flatMap((x) =>
+      ys.map((y) => ({
+        x,
+        y,
+        distance: Math.hypot(x - this.width / 2, y - this.height / 2),
+      })),
+    );
+    candidates.sort((a, b) => a.distance - b.distance);
+
+    for (const candidate of candidates) {
+      const clear = occupied.every(
+        ({ center, footprint }) =>
+          Math.abs(candidate.x - center.x) >=
+            halfSize + footprint.width / 2 + TILE_CLEARANCE ||
+          Math.abs(candidate.y - center.y) >=
+            halfSize + footprint.height / 2 + TILE_CLEARANCE,
+      );
+      if (clear) return { x: candidate.x, y: candidate.y };
+    }
+    return null;
+  }
+
+  private resetCustomBoard() {
+    const starts = this.customStarts;
+    if (!starts?.length) return;
+    this.cancelAll();
+    const halfSize = TILE_FACE_SIZE / 2;
+    const fitCenter = (center: Point): Point => ({
+      x: clamp(
+        center.x,
+        Math.min(halfSize + 8, this.width / 2),
+        Math.max(this.width - halfSize - 8, this.width / 2),
+      ),
+      y: clamp(
+        center.y,
+        Math.min(halfSize + 8, this.height / 2),
+        Math.max(this.height - halfSize - 8, this.height / 2),
+      ),
+    });
+    this.customStarts = starts.map((start) => ({
+      char: start.char,
+      center: fitCenter(start.center),
+    }));
+    this.boardPreset = "custom";
+    this.selectedCharacter = starts.at(-1)!.char;
+    this.objects = this.customStarts.map((start) =>
+      this.createObject(start.char, start.center, false),
+    );
+    this.preview = null;
+    this.setPhase(
+      "whole",
+      `${this.objects.length} custom characters are ready. Pull a component or combine compatible tiles.`,
+    );
+  }
+
   resetStarters() {
     this.cancelAll();
     this.boardPreset = "starters";
+    this.customStarts = null;
     this.selectedCharacter = "想";
     const characters = ["想", "相", "明", "休", "好"];
     const columns =
@@ -406,8 +536,10 @@ export class PlaygroundWorld {
       const column = index % columns;
       const xStep = columns > 1 ? xSpan / (columns - 1) : 0;
       const yStep = rows > 1 ? ySpan / (rows - 1) : 0;
+      const centerColumn =
+        rowCount === 1 && columns > 1 ? (columns - 1) / 2 : (rowCount - 1) / 2;
       const center = {
-        x: this.width / 2 + (column - (rowCount - 1) / 2) * xStep,
+        x: this.width / 2 + (column - centerColumn) * xStep,
         y: this.height / 2 + (row - (rows - 1) / 2) * yStep,
       };
       return this.createObject(char, center, false);
@@ -427,6 +559,7 @@ export class PlaygroundWorld {
     this.height = height;
     this.compileAssets();
     if (preset === "starters") this.resetStarters();
+    else if (preset === "custom") this.resetCustomBoard();
     else this.reset(selected);
   }
 

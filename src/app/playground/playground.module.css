@@ -259,7 +259,7 @@
 
 .characterForm > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 6px;
 }
 
@@ -282,9 +282,10 @@
 }
 
 .characterForm button {
-  padding: 0 11px;
+  padding: 0 9px;
   background: #e9edde;
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .characterForm p {

@@ -18,7 +18,7 @@ type Status = {
   phase: string;
   message: string;
   character: string;
-  boardPreset: "starters" | "single";
+  boardPreset: "starters" | "single" | "custom";
   tileCount: number;
 };
 const starterSamples = ["想", "相", "明", "休", "好", "林", "森"];
@@ -418,6 +418,59 @@ export default function Playground() {
         );
     }
   };
+  const addCharacterToBoard = async () => {
+    const character = characterInput.trim();
+    if (Array.from(character).length !== 1) {
+      setSelectionError("Enter one Chinese character.");
+      return;
+    }
+    const world = worldRef.current;
+    const manifest = manifestRef.current;
+    if (!world || !manifest) return;
+    setSelectionBusy(true);
+    setSelectionError("");
+    try {
+      const assets = await loadPlaygroundAssets([character], manifest);
+      if (worldRef.current !== world) return;
+      world.registerAssets(assets);
+      const result = world.addCharacter(character);
+      if (result === "added") setCharacterInput("");
+      setStatus({
+        phase: world.phase,
+        message: world.message,
+        character: world.selectedCharacter,
+        boardPreset: world.boardPreset,
+        tileCount: world.tileCount,
+      });
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (canvas && ctx) {
+        drawLayers(
+          ctx,
+          world.layers(),
+          ratioRef.current,
+          settingsRef.current.visualStyle,
+        );
+        const magnet = world.magnet();
+        if (magnet)
+          drawMagnet(
+            ctx,
+            magnet.from,
+            magnet.to,
+            magnet.targetFrom,
+            magnet.targetTo,
+            magnet.strength,
+            ratioRef.current,
+          );
+      }
+    } catch {
+      setSelectionError(
+        `No usable drawing data was found for ${character}. Try another dictionary character.`,
+      );
+    } finally {
+      setSelectionBusy(false);
+    }
+  };
   const submitCharacter = () => {
     const character = characterInput.trim();
     if (Array.from(character).length !== 1) {
@@ -454,6 +507,12 @@ export default function Playground() {
   const nudge = () => {
     worldRef.current?.nudge();
   };
+  const boardDescription =
+    status.boardPreset === "starters"
+      ? `${status.tileCount} starter characters`
+      : status.boardPreset === "custom"
+        ? `${status.tileCount} custom characters`
+        : status.character;
 
   return (
     <main className={styles.shell}>
@@ -485,7 +544,7 @@ export default function Playground() {
               ref={canvasRef}
               tabIndex={0}
               role="application"
-              aria-label={`Physical ${status.boardPreset === "starters" ? "five starter characters" : status.character} playground in ${visualStyle} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.`}
+              aria-label={`Physical ${boardDescription} playground in ${visualStyle} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.`}
               aria-describedby="playground-keys"
             />
             {!ready && (
@@ -509,7 +568,7 @@ export default function Playground() {
             )}
             <span className={styles.characterNote} aria-live="polite">
               <strong>
-                {status.boardPreset === "starters"
+                {status.boardPreset !== "single"
                   ? `${status.tileCount} tiles`
                   : status.character}
               </strong>{" "}
@@ -536,6 +595,10 @@ export default function Playground() {
             <p>
               Drag a blank tile face to move the whole character. Fixed keeps it
               centered; Weighted gives it more movement.
+            </p>
+            <p>
+              Add any drawable dictionary character to keep building the board,
+              or explore it alone to replace the current scene.
             </p>
           </section>
 
@@ -591,6 +654,14 @@ export default function Playground() {
                 />
                 <button type="submit" disabled={!ready || selectionBusy}>
                   {selectionBusy ? "Loading…" : "Explore"}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Add to board"
+                  disabled={!ready || selectionBusy}
+                  onClick={() => void addCharacterToBoard()}
+                >
+                  Add
                 </button>
               </div>
               <p
