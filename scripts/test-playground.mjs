@@ -257,11 +257,57 @@ try {
   assertNoTileOverlap(current.characters, "five starter tear");
   assertUniformTiles(current.characters, "five starter tear");
   assertTilesInsideBoard(current.characters, box, "five starter tear");
+  const heartAtTear = current.characters.find((object) => object.char === "心");
+  const tileCenterAtTear = heartAtTear.tile.center;
+  const inkCenterAtTear = heartAtTear.inkCenter;
+  await page.mouse.move(heartStart.x, heartStart.y + 240);
+  for (let i = 0; i < 18; i++) await advance(page, 1000 / 60);
+  current = await state();
+  const heldHeart = current.characters.find((object) => object.char === "心");
+  assert.ok(
+    Math.hypot(
+      heldHeart.tile.center.x - tileCenterAtTear.x,
+      heldHeart.tile.center.y - tileCenterAtTear.y,
+    ) > 12,
+    "the new tile moves after the tear while the ink remains held",
+  );
+  assert.ok(
+    Math.hypot(
+      heldHeart.tile.center.x - heldHeart.inkCenter.x,
+      heldHeart.tile.center.y - heldHeart.inkCenter.y,
+    ) < 30,
+    "the new tile follows its component while the ink remains held",
+  );
+  assert.ok(
+    Math.hypot(
+      heldHeart.inkCenter.x - inkCenterAtTear.x,
+      heldHeart.inkCenter.y - inkCenterAtTear.y,
+    ) > 12,
+    "the held strokes continue moving after the tear",
+  );
   await page.screenshot({
     path: "output/playground/five-starter-tear.png",
-    fullPage: true,
+    fullPage: false,
   });
   await page.mouse.up();
+  current = await state();
+  const heartAtRelease = current.characters.find(
+    (object) => object.char === "心",
+  );
+  assert.ok(heartAtRelease, "the released tile remains in the scene");
+  const tileCenterAtRelease = heartAtRelease.tile.center;
+  await advance(page, 1000 / 60);
+  const heartAfterRelease = (await state()).characters.find(
+    (object) => object.char === "心",
+  );
+  assert.ok(heartAfterRelease, "the tile remains after the next physics step");
+  assert.ok(
+    Math.hypot(
+      heartAfterRelease.tile.center.x - tileCenterAtRelease.x,
+      heartAfterRelease.tile.center.y - tileCenterAtRelease.y,
+    ) < 0.02,
+    "the tile stays where the ink was released",
+  );
   await page.getByRole("button", { name: "Five starters" }).click();
   current = await state();
   assert.equal(current.characters.length, 5);

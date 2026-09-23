@@ -51,6 +51,7 @@ type SceneObject = {
   ink: Ink;
   free: boolean;
   recipe: Recipe | null;
+  tileFollowsInkUntilRelease: boolean;
 };
 type Contact = {
   entityId: number;
@@ -234,6 +235,7 @@ export class PlaygroundWorld {
       ink: skinStrokes(strokes, body),
       free,
       recipe: this.recipeByChar.get(char) ?? null,
+      tileFollowsInkUntilRelease: false,
     };
   }
 
@@ -798,6 +800,7 @@ export class PlaygroundWorld {
       contact.body.release(pointerId);
       contact.body = object.body;
       contact.binding = object.body.start(contact.target, pointerId);
+      if (!contact.tileGrip) object.tileFollowsInkUntilRelease = true;
     }
     this.preview = null;
     this.setPhase(
@@ -1068,11 +1071,35 @@ export class PlaygroundWorld {
       const held = [...this.contacts.values()].some(
         (contact) => contact.entityId === object.id,
       );
+      const heldInk = [...this.contacts.values()].some(
+        (contact) => contact.entityId === object.id && !contact.tileGrip,
+      );
+      if (object.tileFollowsInkUntilRelease && !heldInk)
+        object.tileFollowsInkUntilRelease = false;
       const aligning =
         magneticPair?.a.id === object.id || magneticPair?.b.id === object.id;
       if (this.visualStyle !== "flat" && !held && !aligning)
         object.body.restorePose(surfaceAfter, dt);
       object.body.step(dt);
+      if (object.tileFollowsInkUntilRelease && heldInk) {
+        const inkPose = object.body.pose();
+        const tilePose = object.surfaceBody.pose();
+        const tileSize = this.tileDimensions(object.surfaceBody);
+        const targetX = clamp(
+          inkPose.x,
+          tileSize.width / 2,
+          this.width - tileSize.width / 2,
+        );
+        const targetY = clamp(
+          inkPose.y,
+          tileSize.height / 2,
+          this.height - tileSize.height / 2,
+        );
+        const dx = targetX - tilePose.x;
+        const dy = targetY - tilePose.y;
+        object.surfaceBody.translate(dx, dy);
+        object.body.translate(dx, dy);
+      }
     }
     const magnet = this.findMagnet();
     if (!magnet) return false;

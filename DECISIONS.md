@@ -269,3 +269,11 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** The canvas needs more of the viewport and enough compact, consistent tiles for the intended multi-character exploration loop. Placing lab controls beside the canvas gives the board more height without hiding the controls.
 
 **Consequences:** Initial board tiles are spaced in a responsive two- or three-column layout, and the Five starters preset can be restored after exploring or tearing pieces. A tear commits only when both new faces fit within the board and clear one another and every existing tile. The side panel moves below the board on phones; the board remains tall enough to rearrange several pieces.
+
+## D-034 — A newly torn tile follows its held ink until release
+
+**Decision (2026-09-23):** When a tear creates a new character under an active ink drag, its tile follows that character's ink center while one or more ink contacts remain held. On the final release, the tile stops at its current position and the ink restores toward that tile.
+
+**Why:** Keeping a tile at the tear point while its character is still being dragged separates the strokes from the object too early and makes the newly created tile feel detached from the gesture.
+
+**Consequences:** A player can continue the same pull after the tear to place the tile. With multitouch, the tile follows until the last ink pointer on that new character is released; later ink drags keep the tile anchored as before.
