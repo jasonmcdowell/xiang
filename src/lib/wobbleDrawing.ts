@@ -10,6 +10,7 @@ export type InkLayer = {
   ink: Ink;
   body: WobbleBody;
   surfaceBody?: WobbleBody;
+  character?: string;
 };
 export type GlyphGeometry = {
   center: Point;

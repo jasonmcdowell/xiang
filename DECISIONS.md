@@ -293,3 +293,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** The physics scene needs exact stroke paths and a clear two-object composition layout. Grouping the existing three-tree decomposition into two valid pair steps makes 林 and 森 explorable without pretending every dictionary entry is already physics-ready or expanding the five-tile starting board.
 
 **Consequences:** `data/decomposition_extensions.json` records the reviewed nested grouping used by the scene generator. The generated playground asset includes 林 and 森 outlines; starter count and layout remain unchanged. An intermediate 林 tile stays interactable while the third 木 waits to form 森.
+
+## D-037 — Keep sibling board characters visible during a tear preview
+**Decision (2026-09-23):** While ink is stretching into a tear preview, replace only the selected character's rendered ink with its two deforming child groups. Keep every other board character in the render layers and preserve the board's existing draw order.
+
+**Why:** A tear preview is a temporary view of one character splitting; it should not hide unrelated objects in the playground.
+
+**Consequences:** The existing characters remain visible throughout a drag, while the two child groups continue sharing the source tile face until the tear commits. The browser test checks the rendered-layer character list during a five-tile tear.

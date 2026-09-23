@@ -1172,24 +1172,35 @@ export class PlaygroundWorld {
   }
 
   layers(): InkLayer[] {
-    if (this.preview)
+    const preview = this.preview;
+    return this.objects.flatMap((object) => {
+      if (!preview || object !== preview.source)
+        return [
+          {
+            ink: object.ink,
+            body: object.body,
+            surfaceBody: object.surfaceBody,
+            character: object.char,
+          },
+        ];
+
+      const restIndex = 1 - preview.partIndex;
+      const parts = object.recipe!.parts;
       return [
         {
-          ink: this.preview.restInk,
-          body: this.preview.restBody,
-          surfaceBody: this.preview.source.surfaceBody,
+          ink: preview.restInk,
+          body: preview.restBody,
+          surfaceBody: object.surfaceBody,
+          character: parts[restIndex].char,
         },
         {
-          ink: this.preview.partInk,
-          body: this.preview.partBody,
-          surfaceBody: this.preview.source.surfaceBody,
+          ink: preview.partInk,
+          body: preview.partBody,
+          surfaceBody: object.surfaceBody,
+          character: parts[preview.partIndex].char,
         },
       ];
-    return this.objects.map((object) => ({
-      ink: object.ink,
-      body: object.body,
-      surfaceBody: object.surfaceBody,
-    }));
+    });
   }
 
   connections() {
@@ -1298,6 +1309,7 @@ export class PlaygroundWorld {
             : [],
         ),
       })),
+      renderedInkLayers: this.layers().map((layer) => layer.character),
       tearing: this.preview
         ? {
             parent: this.preview.source.char,

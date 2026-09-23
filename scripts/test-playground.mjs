@@ -360,7 +360,22 @@ try {
   const heartStart = screenPoint(box, current.componentGrabPoints["心"][0]);
   await page.mouse.move(heartStart.x, heartStart.y);
   await page.mouse.down();
-  for (let i = 1; i <= 50 && current.phase !== "loose"; i++) {
+  for (let i = 1; i <= 12 && current.phase !== "loose"; i++) {
+    await page.mouse.move(heartStart.x, heartStart.y + i * 9);
+    await advance(page, 1000 / 60);
+    current = await state();
+  }
+  assert.equal(current.phase, "stretching");
+  assert.deepEqual(
+    current.renderedInkLayers,
+    ["相", "心", "相", "明", "休", "好"],
+    "a tear preview replaces only its source ink and keeps every other board character rendered",
+  );
+  await page.screenshot({
+    path: "output/playground/five-starter-stretch.png",
+    fullPage: true,
+  });
+  for (let i = 13; i <= 50 && current.phase !== "loose"; i++) {
     await page.mouse.move(heartStart.x, heartStart.y + i * 9);
     await advance(page, 1000 / 60);
     current = await state();
