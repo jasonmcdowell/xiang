@@ -1,0 +1,373 @@
+.shell {
+  max-width: 1192px;
+  padding: 0 48px 28px;
+  margin: auto;
+}
+.header {
+  height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  gap: 24px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "Kaiti SC", serif;
+  font-size: 30px;
+}
+.brand > span {
+  font-family: Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: -1.8px;
+}
+.dot,
+.intro h1 span {
+  color: var(--orange);
+}
+.edition {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.back {
+  font-size: 12px;
+}
+.intro {
+  margin: 38px 0 26px;
+}
+.eyebrow {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.intro h1 {
+  font:
+    400 clamp(34px, 4vw, 50px)/1.2 Georgia,
+    serif;
+  letter-spacing: -1.7px;
+  margin: 12px 0;
+}
+.intro > p:last-child {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 0;
+}
+.labControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 20px 0 14px;
+}
+.samples {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.controlLabel,
+.modePicker legend {
+  color: var(--muted);
+  font-size: 11px;
+}
+.sampleButtons {
+  display: flex;
+  gap: 7px;
+}
+.sampleButtons button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  font:
+    24px/1 "Kaiti SC",
+    "Songti SC",
+    serif;
+}
+.sampleButtons button[aria-pressed="true"] {
+  border-color: #486853;
+  background: #e9edde;
+}
+.sampleButtons button:disabled {
+  opacity: 0.55;
+}
+.modePicker {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.modePicker legend {
+  float: left;
+  margin-right: 2px;
+}
+.modePicker label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.modePicker label span {
+  color: var(--muted);
+}
+.modePicker input,
+.stylePicker input,
+.footer input {
+  accent-color: #486853;
+}
+.stylePicker {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-width: 0;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+.stylePicker legend {
+  float: left;
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.stylePicker label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.stylePicker label span {
+  color: var(--muted);
+}
+.stage {
+  position: relative;
+  height: clamp(350px, 55vh, 580px);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+.stage canvas:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: -3px;
+}
+.stage:fullscreen {
+  height: 100vh;
+  width: 100vw;
+  border: 0;
+  background: var(--background);
+}
+.characterNote,
+.stageNote {
+  position: absolute;
+  bottom: 20px;
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.characterNote {
+  left: 24px;
+}
+.characterNote i {
+  font-style: normal;
+  margin-left: 10px;
+}
+.stageNote {
+  right: 24px;
+}
+.liveMessage {
+  min-height: 20px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--muted);
+  background: var(--background);
+}
+.loading button {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 16px;
+}
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22px 0;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.softness {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 12px;
+}
+.softness input {
+  width: 124px;
+  accent-color: #486853;
+  cursor: pointer;
+}
+.softness span {
+  color: var(--muted);
+  width: 42px;
+  font-size: 11px;
+}
+.actions {
+  display: flex;
+  gap: 10px;
+}
+.actions button {
+  padding: 10px 14px;
+  background: #e9edde;
+  color: var(--ink);
+  border: 1px solid #d8decf;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.actions button:last-child {
+  background: transparent;
+}
+.actions button span {
+  margin-left: 12px;
+}
+.actions button:hover {
+  background: #e0e6d7;
+}
+.footer {
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.footer p {
+  line-height: 1.7;
+}
+.footer p span {
+  margin-left: 12px;
+}
+.footer label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.footer input {
+  accent-color: #486853;
+}
+.credit {
+  font-size: 9px;
+  color: #8c9486;
+  margin-top: 8px;
+}
+.credit a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .shell {
+    padding: 0 20px 24px;
+  }
+  .header {
+    height: 72px;
+    gap: 16px;
+  }
+  .edition {
+    display: none;
+  }
+  .intro {
+    margin-top: 28px;
+  }
+  .intro h1 {
+    letter-spacing: -1px;
+  }
+  .labControls {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .samples {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .modePicker {
+    flex-wrap: wrap;
+    gap: 9px 14px;
+  }
+  .stylePicker {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 9px 14px;
+  }
+  .modePicker legend {
+    width: 100%;
+  }
+  .modePicker label span {
+    display: none;
+  }
+  .stylePicker label span {
+    display: none;
+  }
+  .stage {
+    height: clamp(680px, 80vh, 720px);
+  }
+  .stageNote {
+    display: none;
+  }
+  .characterNote {
+    bottom: 14px;
+    left: 16px;
+  }
+  .controls {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+    padding: 18px 0;
+  }
+  .softness input {
+    flex: 1;
+  }
+  .actions button {
+    flex: 1;
+  }
+  .actions {
+    gap: 12px;
+  }
+  .footer {
+    gap: 8px;
+  }
+  .footer p span {
+    display: block;
+    margin: 0;
+  }
+  .footer label {
+    padding-top: 3px;
+  }
+}
