@@ -56,6 +56,69 @@ const assertNoTileOverlap = (characters, label) => {
       );
     }
 };
+const getFaceOverlap = (first, second) => ({
+  x:
+    (first.tile.width + second.tile.width) / 2 -
+    Math.abs(first.tile.center.x - second.tile.center.x),
+  y:
+    (first.tile.height + second.tile.height) / 2 -
+    Math.abs(first.tile.center.y - second.tile.center.y),
+});
+const dragTileFace = async (target, box, snapshot, character, center) => {
+  const tile = snapshot.characters.find((item) => item.char === character);
+  assert.ok(tile, `find ${character} tile to drag`);
+  const grip = { x: tile.tile.width * 0.4, y: -tile.tile.height * 0.4 };
+  const start = {
+    x: tile.tile.center.x + grip.x,
+    y: tile.tile.center.y + grip.y,
+  };
+  const end = { x: center.x + grip.x, y: center.y + grip.y };
+  const distance = Math.hypot(end.x - start.x, end.y - start.y);
+  const steps = Math.max(4, Math.ceil(distance / 12));
+  await target.mouse.move(box.x + start.x, box.y + start.y);
+  await target.mouse.down();
+  const grabbed = await state(target);
+  assert.equal(
+    grabbed.activeContacts[0]?.character,
+    character,
+    `grab the exposed face of ${character}`,
+  );
+  assert.equal(grabbed.activeContacts[0]?.interaction, "tile");
+  for (let i = 1; i <= steps; i++) {
+    const amount = i / steps;
+    await target.mouse.move(
+      box.x + start.x + (end.x - start.x) * amount,
+      box.y + start.y + (end.y - start.y) * amount,
+    );
+    await advance(target, 1000 / 60);
+  }
+  for (let i = 0; i < 6; i++) await advance(target, 1000 / 60);
+  return state(target);
+};
+const moveHeldTileFace = async (target, box, snapshot, character, center) => {
+  const tile = snapshot.characters.find((item) => item.char === character);
+  const contact = snapshot.activeContacts.find(
+    (item) => item.character === character && item.interaction === "tile",
+  );
+  assert.ok(tile && contact, `keep holding the ${character} tile face`);
+  const start = contact.target;
+  const delta = {
+    x: center.x - tile.tile.center.x,
+    y: center.y - tile.tile.center.y,
+  };
+  const distance = Math.hypot(delta.x, delta.y);
+  const steps = Math.max(4, Math.ceil(distance / 12));
+  for (let i = 1; i <= steps; i++) {
+    const amount = i / steps;
+    await target.mouse.move(
+      box.x + start.x + delta.x * amount,
+      box.y + start.y + delta.y * amount,
+    );
+    await advance(target, 1000 / 60);
+  }
+  for (let i = 0; i < 6; i++) await advance(target, 1000 / 60);
+  return state(target);
+};
 const drag = async (target, box, start, movements, dx, dy = 0) => {
   const origin = screenPoint(box, start);
   await target.mouse.move(origin.x, origin.y);
@@ -269,65 +332,68 @@ try {
   assert.equal(
     current.magnet.active,
     false,
-    "wrong-side pieces do not attract into a reversed character",
+    "separated, wrong-side tile faces do not attract",
   );
   await page.screenshot({
     path: "output/playground/nested-pieces.png",
     fullPage: true,
   });
-  let alignmentAttempts = 0;
-  while (
-    !current.magnet.active &&
-    !current.characters.some((object) => object.char === "相") &&
-    alignmentAttempts++ < 12
-  ) {
-    const contact = current.activeContacts.find(
-      (item) => item.character === "木",
-    );
-    if (!contact) break;
-    await page.mouse.move(
-      box.x + contact.target.x - 60,
-      box.y + contact.target.y,
-    );
-    await advance(page, 33);
-    current = await state();
-  }
+  await page.mouse.up();
+  current = await state();
+  let nestedEye = current.characters.find((object) => object.char === "目");
+  current = await dragTileFace(page, box, current, "木", {
+    x: nestedEye.tile.center.x + 88,
+    y: nestedEye.tile.center.y,
+  });
+  const stillWrongSideWood = current.characters.find(
+    (object) => object.char === "木",
+  );
+  const stillWrongSideEye = current.characters.find(
+    (object) => object.char === "目",
+  );
+  const wrongSideOverlap = getFaceOverlap(
+    stillWrongSideWood,
+    stillWrongSideEye,
+  );
+  assert.ok(wrongSideOverlap.x > 0 && wrongSideOverlap.y > 0);
+  assert.equal(
+    current.magnet.active,
+    false,
+    "overlapping faces in the reversed 相 layout still do not attract",
+  );
+  assert.deepEqual(
+    [...current.characters.map((object) => object.char)].sort(),
+    ["心", "木", "目"],
+  );
+  await page.mouse.up();
+  current = await state();
+  nestedEye = current.characters.find((object) => object.char === "目");
+  current = await dragTileFace(page, box, current, "木", {
+    x: nestedEye.tile.center.x - 88,
+    y: nestedEye.tile.center.y,
+  });
   if (current.magnet.active) {
     assert.ok(
       current.magnet.targetFrom.x < current.magnet.targetTo.x,
-      "the capture field preserves the horizontal 相 layout",
+      "the overlapping faces preserve the horizontal 相 layout",
     );
+    assert.ok(current.magnet.tileOverlap.x > 0);
+    assert.ok(current.magnet.tileOverlap.y > 0);
     assert.ok(Math.abs(current.magnet.parentScale.x - nestedScale.x) < 0.03);
     assert.ok(Math.abs(current.magnet.parentScale.y - nestedScale.y) < 0.03);
-    let nestedComposeSteps = 0;
-    while (
-      !current.characters.some((object) => object.char === "相") &&
-      nestedComposeSteps++ < 40
-    ) {
-      if (!current.magnet.active) {
-        await advance(page, 33);
-        current = await state();
-        continue;
-      }
-      const contact = current.activeContacts.find(
-        (item) => item.character === "木",
-      );
-      const dx = current.magnet.targetFrom.x - current.magnet.from.x;
-      const dy = current.magnet.targetFrom.y - current.magnet.from.y;
-      await page.mouse.move(
-        box.x + contact.target.x + dx * 0.12,
-        box.y + contact.target.y + dy * 0.12,
-      );
-      await advance(page, 33);
-      current = await state();
-    }
   } else {
-    assert.ok(
-      current.characters.some(
-        (object) => object.char === "相" || object.char === "想",
-      ),
-      "the pieces snap back into their compatible character layout",
-    );
+    assert.ok(current.characters.some((object) => object.char === "相"));
+  }
+  await page.mouse.up();
+  let nestedComposeSteps = 0;
+  while (
+    !current.characters.some(
+      (object) => object.char === "相" || object.char === "想",
+    ) &&
+    nestedComposeSteps++ < 300
+  ) {
+    await advance(page, 33);
+    current = await state();
   }
   const restoredXiang = current.characters.find(
     (object) => object.char === "相",
@@ -409,80 +475,85 @@ try {
     ["相", "心"],
   );
   assert.equal(current.activeContacts[0].character, "相");
-  current = await state();
   assert.equal(
     current.magnet.active,
-    true,
-    "the attraction field catches the pair from a tile-clearing tear",
+    false,
+    "compatible strokes do not tug while their tile faces are separate",
   );
-  assert.ok(current.magnet.distance > 12 && current.magnet.distance < 220);
-  assert.ok(
-    current.magnet.targetFrom.y < current.magnet.targetTo.y,
-    "the IDS top/bottom arrangement is preserved",
-  );
-  let iterations = 0;
-  while (
-    current.magnet.active &&
-    current.magnet.distance > 60 &&
-    iterations++ < 8
-  ) {
-    const contact = current.activeContacts.find(
-      (item) => item.character === "相",
-    );
-    const dx = current.magnet.targetFrom.x - current.magnet.from.x;
-    const dy = current.magnet.targetFrom.y - current.magnet.from.y;
-    await page.mouse.move(
-      box.x + contact.target.x + dx * 0.2,
-      box.y + contact.target.y + dy * 0.2,
-    );
-    await advance(page, 33);
-    current = await state();
-  }
-  assert.ok(current.magnet.active && current.magnet.distance > 12);
-  await advance(page, 100);
-  current = await state();
-  const heldXiang = current.characters.find((object) => object.char === "相");
-  assert.ok(
-    heldXiang && heldXiang.center.deformation > 1,
-    "a held component visibly bends while it waits just outside snap range",
-  );
-  assert.ok(current.magnet.active && current.magnet.distance > 12);
-  await page.screenshot({
-    path: "output/playground/magnetic-pull.png",
-    fullPage: true,
-  });
   await page.mouse.up();
   current = await state();
-  const xiangTearTile = current.characters.find(
+  const xiangTileAtTear = current.characters.find(
     (object) => object.char === "相",
-  ).tile.center;
-  const tileGripPoint = screenPoint(box, {
-    x: xiangTearTile.x - 80,
-    y: xiangTearTile.y - 80,
-  });
-  await page.mouse.move(tileGripPoint.x, tileGripPoint.y);
-  await page.mouse.down();
-  current = await state();
-  assert.equal(
-    current.activeContacts[0].interaction,
-    "tile",
-    "a blank tile face can be used to reassemble the pair",
+  ).tile;
+  const heartTileAtTear = current.characters.find(
+    (object) => object.char === "心",
+  ).tile;
+  const tearDirection = Math.sign(
+    xiangTileAtTear.center.x - heartTileAtTear.center.x,
   );
-  iterations = 0;
+  const touchingCenter = {
+    x:
+      heartTileAtTear.center.x +
+      tearDirection * ((xiangTileAtTear.width + heartTileAtTear.width) / 2 + 1),
+    y: xiangTileAtTear.center.y,
+  };
+  current = await dragTileFace(page, box, current, "相", {
+    ...touchingCenter,
+  });
+  assert.equal(
+    current.magnet.active,
+    false,
+    "edge contact alone does not start the magnetic pull",
+  );
+  const overlappedCenter = {
+    ...touchingCenter,
+    x: touchingCenter.x - tearDirection * 2,
+  };
+  current = await moveHeldTileFace(page, box, current, "相", overlappedCenter);
+  if (current.magnet.active) {
+    const xiangTile = current.characters.find((object) => object.char === "相");
+    const heart = current.characters.find((object) => object.char === "心");
+    const overlap = getFaceOverlap(xiangTile, heart);
+    assert.ok(overlap.x > 0 && overlap.y > 0);
+    assert.ok(current.magnet.tileOverlap.x > 0);
+    assert.ok(current.magnet.tileOverlap.x < 3);
+    assert.ok(current.magnet.tileOverlap.y > 0);
+    assert.ok(current.magnet.distance > 12 && current.magnet.distance < 220);
+    assert.ok(
+      current.magnet.targetFrom.y < current.magnet.targetTo.y,
+      "the IDS top/bottom arrangement is preserved",
+    );
+    const shallowStrength = current.magnet.strength;
+    assert.equal(
+      current.activeContacts[0].interaction,
+      "tile",
+      "compatible faces can be held while the strokes tug",
+    );
+    current = await moveHeldTileFace(page, box, current, "相", {
+      x: heartTileAtTear.center.x,
+      y: touchingCenter.y,
+    });
+    if (current.magnet.active) {
+      assert.ok(current.magnet.strength > shallowStrength);
+      assert.ok(current.magnet.tileOverlap.x > 0);
+      assert.ok(current.magnet.tileOverlap.y > 32);
+      await page.screenshot({
+        path: "output/playground/magnetic-pull.png",
+        fullPage: true,
+      });
+    } else {
+      assert.ok(current.characters.some((object) => object.char === "想"));
+    }
+  } else {
+    assert.ok(current.characters.some((object) => object.char === "想"));
+  }
+  await page.mouse.up();
+  current = await state();
+  let iterations = 0;
   while (
     !current.characters.some((object) => object.char === "想") &&
-    iterations++ < 28
+    iterations++ < 300
   ) {
-    if (!current.magnet.active) break;
-    const contact = current.activeContacts.find(
-      (item) => item.character === "相",
-    );
-    const dx = current.magnet.targetFrom.x - current.magnet.from.x;
-    const dy = current.magnet.targetFrom.y - current.magnet.from.y;
-    await page.mouse.move(
-      box.x + contact.target.x + dx,
-      box.y + contact.target.y + dy,
-    );
     await advance(page, 33);
     current = await state();
   }
@@ -788,7 +859,7 @@ try {
   await page.getByRole("button", { name: "Split 想", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Playground passed: flat/raised/draped rendering and hit testing, fixed and weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, correct-layout magnetic pull/distortion/snap, wrong-side rejection, reduced motion, resize, loading recovery, and game navigation.",
+    "Playground passed: flat/raised/draped rendering and hit testing, fixed and weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile-overlap-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
   );
 } finally {
   await browser.close();

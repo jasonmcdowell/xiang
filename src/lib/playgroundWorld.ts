@@ -81,6 +81,9 @@ type MagnetMatch = {
   errorX: number;
   errorY: number;
   distance: number;
+  overlapX: number;
+  overlapY: number;
+  overlapDepth: number;
   parentScaleX: number;
   parentScaleY: number;
 };
@@ -104,6 +107,10 @@ const clamp = (value: number, low: number, high: number) =>
 const TILE_FACE_INSET = 38;
 const TILE_FACE_SIZE = 184;
 const TILE_CLEARANCE = 12;
+const TILE_OVERLAP_EPSILON = 0.01;
+const MAGNET_FULL_ALIGNMENT_DISTANCE = TILE_FACE_SIZE + TILE_CLEARANCE * 3;
+const MAGNET_FAR_ALIGNMENT_STRENGTH = 0.15;
+const MAGNET_FULL_STRENGTH_OVERLAP = 32;
 
 export class PlaygroundWorld {
   private readonly assets: PlaygroundAssets;
@@ -115,7 +122,6 @@ export class PlaygroundWorld {
   private contacts = new Map<number, Contact>();
   private nextId = 1;
   private elapsed = 0;
-  private readonly attractionRadius = TILE_FACE_SIZE + TILE_CLEARANCE * 3;
   private readonly snapRadius = 12;
   phase: "whole" | "stretching" | "loose" = "whole";
   message = "Pull a component outward. Stretch its seam to tear it free.";
@@ -549,6 +555,51 @@ export class PlaygroundWorld {
     };
   }
 
+  private tileOverlap(a: WobbleBody, b: WobbleBody) {
+    const centerA = a.pose();
+    const centerB = b.pose();
+    const dimensionsA = this.tileDimensions(a);
+    const dimensionsB = this.tileDimensions(b);
+    const angleA = centerA.angle;
+    const angleB = centerB.angle;
+    const axes = [
+      { x: Math.cos(angleA), y: Math.sin(angleA) },
+      { x: -Math.sin(angleA), y: Math.cos(angleA) },
+      { x: Math.cos(angleB), y: Math.sin(angleB) },
+      { x: -Math.sin(angleB), y: Math.cos(angleB) },
+    ];
+    let depth = Number.POSITIVE_INFINITY;
+    for (const axis of axes) {
+      const radius = (
+        dimensions: { width: number; height: number },
+        angle: number,
+      ) =>
+        (dimensions.width / 2) *
+          Math.abs(axis.x * Math.cos(angle) + axis.y * Math.sin(angle)) +
+        (dimensions.height / 2) *
+          Math.abs(-axis.x * Math.sin(angle) + axis.y * Math.cos(angle));
+      const overlap =
+        radius(dimensionsA, angleA) +
+        radius(dimensionsB, angleB) -
+        Math.abs(
+          (centerB.x - centerA.x) * axis.x + (centerB.y - centerA.y) * axis.y,
+        );
+      if (overlap <= TILE_OVERLAP_EPSILON) return null;
+      depth = Math.min(depth, overlap);
+    }
+    const footprintA = this.tileFootprint(a);
+    const footprintB = this.tileFootprint(b);
+    const x =
+      (footprintA.width + footprintB.width) / 2 -
+      Math.abs(centerA.x - centerB.x);
+    const y =
+      (footprintA.height + footprintB.height) / 2 -
+      Math.abs(centerA.y - centerB.y);
+    return x > TILE_OVERLAP_EPSILON && y > TILE_OVERLAP_EPSILON
+      ? { x, y, depth }
+      : null;
+  }
+
   private facesClear(
     centerA: Point,
     faceA: { width: number; height: number },
@@ -664,7 +715,7 @@ export class PlaygroundWorld {
     this.preview = null;
     this.setPhase(
       "loose",
-      `Free pieces: ${recipe.parts[0].char} + ${recipe.parts[1].char}. Bring them together in the matching layout.`,
+      `Free pieces: ${recipe.parts[0].char} + ${recipe.parts[1].char}. Overlap their tile faces to let the strokes drift into place.`,
     );
   }
 
@@ -676,6 +727,8 @@ export class PlaygroundWorld {
       for (let j = i + 1; j < this.objects.length; j++) {
         const b = this.objects[j];
         if (!b.free) continue;
+        const overlap = this.tileOverlap(a.surfaceBody, b.surfaceBody);
+        if (!overlap) continue;
         for (const recipe of this.recipes) {
           const first = recipe.parts[0].char,
             second = recipe.parts[1].char;
@@ -720,6 +773,17 @@ export class PlaygroundWorld {
               anchorA.y -
               (layoutB.parentOffset.y - layoutA.parentOffset.y),
             distance = Math.hypot(errorX, errorY);
+          const expectedX = layoutB.parentOffset.x - layoutA.parentOffset.x,
+            expectedY = layoutB.parentOffset.y - layoutA.parentOffset.y,
+            actualX = anchorB.x - anchorA.x,
+            actualY = anchorB.y - anchorA.y,
+            reversedX =
+              Math.abs(expectedX) > TILE_CLEARANCE &&
+              actualX * expectedX < -TILE_CLEARANCE * Math.abs(expectedX),
+            reversedY =
+              Math.abs(expectedY) > TILE_CLEARANCE &&
+              actualY * expectedY < -TILE_CLEARANCE * Math.abs(expectedY);
+          if (reversedX || reversedY) continue;
           if (!best || distance < best.distance)
             best = {
               recipe,
@@ -732,13 +796,29 @@ export class PlaygroundWorld {
               errorX,
               errorY,
               distance,
+              overlapX: overlap.x,
+              overlapY: overlap.y,
+              overlapDepth: overlap.depth,
               parentScaleX,
               parentScaleY,
             };
         }
       }
     }
-    return best && best.distance <= this.attractionRadius ? best : null;
+    return best;
+  }
+
+  private magnetStrength(match: MagnetMatch) {
+    const alignment =
+      MAGNET_FAR_ALIGNMENT_STRENGTH +
+      (1 - MAGNET_FAR_ALIGNMENT_STRENGTH) *
+        clamp(1 - match.distance / MAGNET_FULL_ALIGNMENT_DISTANCE, 0, 1);
+    const overlap = clamp(
+      match.overlapDepth / MAGNET_FULL_STRENGTH_OVERLAP,
+      0,
+      1,
+    );
+    return alignment * overlap;
   }
 
   private magnetVisual(match: MagnetMatch) {
@@ -766,7 +846,8 @@ export class PlaygroundWorld {
         y: centerY + match.layoutB.parentOffset.y,
       },
       distance: match.distance,
-      strength: clamp(1 - match.distance / this.attractionRadius, 0, 1),
+      overlap: { x: match.overlapX, y: match.overlapY },
+      strength: this.magnetStrength(match),
     };
   }
 
@@ -830,7 +911,7 @@ export class PlaygroundWorld {
   }
 
   private applyMagnet(match: MagnetMatch, dt: number) {
-    const strength = clamp(1 - match.distance / this.attractionRadius, 0, 1);
+    const strength = this.magnetStrength(match);
     if (!strength) return;
     const x = match.errorX / (match.distance || 1),
       y = match.errorY / (match.distance || 1),
@@ -1061,6 +1142,7 @@ export class PlaygroundWorld {
             parent: magnetMatch?.recipe.char ?? null,
             distance: magnet.distance,
             strength: magnet.strength,
+            tileOverlap: magnet.overlap,
             parentScale: {
               x: magnetMatch?.parentScaleX ?? 1,
               y: magnetMatch?.parentScaleY ?? 1,

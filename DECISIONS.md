@@ -247,3 +247,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** This keeps the toy self-contained and avoids app-controlled non-essential device storage and tracking. GitHub documents IP logging for Pages visits, so the privacy page should make that hosting boundary clear.
 
 **Consequences:** A browser reload resets the best score. If future releases add analytics, ads, cross-visit preferences, accounts, or other browser storage, review the applicable consent and privacy requirements before enabling them; add a consent flow only if the feature set requires it.
+
+## D-031 — Tile overlap gates magnetic pull in the playground
+**Decision (2026-09-22):** Compatible loose components exert no magnetic force while their tile faces are separate. Begin pulling their strokes only after the tile-face rectangles overlap by positive area; edge contact alone does not count. Ramp the tug with the smaller overlap depth and increase it as the anchors approach the recipe's correct relative layout. Do not cap the pull by anchor distance once faces overlap, but continue rejecting clearly reversed component order and snap only near the exact layout. This supersedes D-028's long-range capture field.
+
+**Why:** Component pull should be grounded in a visible physical contact between the tiles. Players must move the tiles into contact before the strokes respond.
+
+**Consequences:** Newly separated pieces no longer attract automatically. Players first drag a blank tile face until compatible faces overlap; the strokes then bend or drift together, with more force as the faces overlap further and the strokes approach their target.
