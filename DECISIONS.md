@@ -369,3 +369,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** A base character such as 女 has no detachable component, so interpreting an ink drag as a deformation leaves the player with no reliable way to move it when the strokes cover most of the tile face.
 
 **Consequences:** Base characters remain draggable from their visible strokes while preserving component tearing for decomposable characters and ink-led recombination for loose components. Flat ink-only mode keeps its existing stroke-drag behavior because it has no visible tile surface.
+
+## D-048 — Allow one-step unfolding from a stroke double-tap
+**Decision (2026-09-24):** A stationary double-click or double-tap on a character's strokes unfolds the same single reviewed recipe as a double-tap on its tile face. The gesture targets the character as a whole and does not choose an individual component recipe.
+
+**Why:** Dense glyphs can cover most of a small tile face, so requiring a blank-face double-tap makes the shortcut difficult or impossible to use.
+
+**Consequences:** Stroke pulls still tear on movement; only two quick stationary taps unfold. A browser regression taps an actual mapped stroke to verify the same one-step, non-overlapping result.

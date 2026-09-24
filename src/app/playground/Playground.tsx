@@ -32,6 +32,7 @@ type PointerStart = {
   moved: boolean;
   at: number;
 };
+const DOUBLE_TAP_INTERVAL_MS = 500;
 const starterSamples = ["想", "相", "明", "休", "好", "林", "森"];
 
 export default function Playground() {
@@ -319,7 +320,6 @@ export default function Playground() {
       const isTap =
         !!start &&
         !start.moved &&
-        performance.now() - start.at <= 500 &&
         Math.hypot(point.x - start.start.x, point.y - start.start.y) <= 12;
       world.pointerUp(point, event.pointerId);
       pointerStartsRef.current.delete(event.pointerId);
@@ -332,7 +332,8 @@ export default function Playground() {
         const isDoubleTap =
           previous?.id === start.id &&
           previous.character === start.character &&
-          performance.now() - previous.at <= 500 &&
+          start.at >= previous.at &&
+          start.at - previous.at <= DOUBLE_TAP_INTERVAL_MS &&
           Math.hypot(
             previous.start.x - start.start.x,
             previous.start.y - start.start.y,
@@ -342,7 +343,11 @@ export default function Playground() {
           world.unfoldTile(start.id);
           handleWorldEvents(world);
           requestSceneAssets();
-        } else lastTapRef.current = start;
+        } else
+          lastTapRef.current = {
+            ...start,
+            at: performance.now(),
+          };
       } else lastTapRef.current = null;
       publish();
       draw();
@@ -760,7 +765,10 @@ export default function Playground() {
               it becomes its own tile. Hold ink over a compatible tile or
               overlap the tiles to guide the strokes back together.
             </p>
-            <p>Double-tap a character tile to unfold one supported step.</p>
+            <p>
+              Double-tap a character or one of its strokes to unfold one
+              supported step.
+            </p>
             <p>
               Drag a blank tile face to move the whole character. Fixed keeps it
               centered; Weighted gives it more movement.

@@ -483,7 +483,7 @@ export class PlaygroundWorld {
     ];
     this.setPhase(
       "loose",
-      `Free pieces: ${source.recipe.parts[0].char} + ${source.recipe.parts[1].char}. Pull a stroke, double-tap a tile, or bring compatible pieces together.`,
+      `Free pieces: ${source.recipe.parts[0].char} + ${source.recipe.parts[1].char}. Pull a stroke, double-tap a stroke or tile, or bring compatible pieces together.`,
     );
     this.events.push({
       type: "unfold",

@@ -147,6 +147,26 @@ const doubleTapTile = async (
     { clickCount: 2, delay: 10 },
   );
 };
+const doubleTapStroke = async (
+  target,
+  box,
+  snapshot,
+  character,
+  objectId = null,
+) => {
+  const tile = snapshot.characters.find((object) =>
+    objectId === null ? object.char === character : object.id === objectId,
+  );
+  assert.ok(
+    tile?.grabPoints.length,
+    `find a stroke on ${character} to double-tap`,
+  );
+  const stroke = tile.grabPoints[0];
+  await target.mouse.click(box.x + stroke.x, box.y + stroke.y, {
+    clickCount: 2,
+    delay: 10,
+  });
+};
 const moveHeldTileFace = async (
   target,
   box,
@@ -417,8 +437,9 @@ try {
     () => JSON.parse(window.render_game_to_text()).tileRepulsion === false,
   );
   await doubleTapLab.evaluate(() => window.scrollTo(0, 0));
+  doubleTapState = await state(doubleTapLab);
   doubleTapBox = await doubleTapLab.locator("canvas").boundingBox();
-  await doubleTapTile(doubleTapLab, doubleTapBox, doubleTapState, "想");
+  await doubleTapStroke(doubleTapLab, doubleTapBox, doubleTapState, "想");
   await doubleTapLab.waitForFunction(() => {
     const game = JSON.parse(window.render_game_to_text());
     return (
