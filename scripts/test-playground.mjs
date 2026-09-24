@@ -342,6 +342,58 @@ try {
       .getByRole("button", { name: /^[想相明休好林森]$/ })
       .allTextContents(),
   );
+  const hskPage = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  const hskGlyphRequests = new Set();
+  hskPage.on("pageerror", (error) => errors.push(error.message));
+  hskPage.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  hskPage.on("request", (request) => {
+    const match = request
+      .url()
+      .match(/\/data\/playground\/glyphs\/([A-F0-9]+)\.json(?:\?|$)/i);
+    if (match) hskGlyphRequests.add(match[1].toUpperCase());
+  });
+  await load(hskPage);
+  await hskPage.getByRole("button", { name: "HSK 1 character set" }).click();
+  await hskPage.getByRole("button", { name: "Add 学 from HSK 1" }).waitFor();
+  assert.equal(await hskPage.getByText("178 drawable characters").count(), 1);
+  await hskPage.getByRole("button", { name: "Add 学 from HSK 1" }).click();
+  await hskPage.waitForFunction(() => {
+    const game = JSON.parse(window.render_game_to_text());
+    return game.boardPreset === "custom" && game.characters.length === 6;
+  });
+  let hskState = await state(hskPage);
+  assert.ok(
+    hskState.characters.some((object) => object.char === "学"),
+    "a Simplified HSK 1 pick adds to the current board",
+  );
+  assertNoTileOverlap(hskState.characters, "Simplified HSK 1 addition");
+  assert.ok(hskGlyphRequests.has("5B66"), "load 学's outline on demand");
+
+  await hskPage.getByRole("button", { name: "Traditional" }).click();
+  await hskPage
+    .getByText("188 drawable characters · 10 without stroke outlines")
+    .waitFor();
+  await hskPage.getByRole("button", { name: "Add 學 from HSK 1" }).click();
+  await hskPage.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).characters.length === 7,
+  );
+  hskState = await state(hskPage);
+  assert.ok(
+    hskState.characters.some((object) => object.char === "學"),
+    "a Traditional HSK 1 pick adds without replacing the Simplified pick",
+  );
+  assertNoTileOverlap(hskState.characters, "Traditional HSK 1 addition");
+  assert.ok(hskGlyphRequests.has("5B78"), "load 學's outline on demand");
+  await hskPage.screenshot({
+    path: "output/playground/hsk1-picker.png",
+    fullPage: true,
+  });
+  await hskPage.close();
+
   await page.getByLabel("Any dictionary character").fill("信");
   await page.getByRole("button", { name: "Add to board" }).click();
   await page.waitForFunction(

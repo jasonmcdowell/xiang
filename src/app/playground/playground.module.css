@@ -293,6 +293,115 @@
   margin: 0;
 }
 
+.hskPicker {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.hskToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hskToggle span:last-child {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.hskContents {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.hskVariants {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.hskVariants button,
+.hskError button {
+  min-height: 30px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.hskVariants button[aria-pressed="true"] {
+  border-color: #486853;
+  background: #e9edde;
+}
+
+.hskCharacters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  max-height: 224px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1px 3px 1px 1px;
+}
+
+.hskCharacters button {
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 24%);
+  color: var(--ink);
+  font:
+    20px/1 "Kaiti SC",
+    "Songti SC",
+    serif;
+  cursor: pointer;
+}
+
+.hskCharacters button:hover:not(:disabled) {
+  border-color: #486853;
+  background: #e9edde;
+}
+
+.hskCharacters button:disabled {
+  opacity: 0.55;
+}
+
+.hskNote {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.hskNote a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hskError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .modePicker,
 .stylePicker {
   display: flex;

@@ -320,3 +320,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Decision (2026-09-23):** Keep the existing **Explore** action for replacing the board with one character, and add a separate **Add to board** action that appends any drawable dictionary character without clearing the current scene. Place the new fixed tile in the nearest available non-overlapping space; report when a drag is active or no tile-sized space remains. On narrow two-column starter layouts, align the single tile in the last row to one side so another tile can be added in the open slot. Load its outline and any supported stroke recipe on demand. A custom board's Reset returns to the character set and tile positions that existed when the first character was added.
 
 **Why:** Players need to test recombination with their own character choices while preserving the five starters and pieces they've already arranged. Distinct, resettable custom boards make those experiments predictable.
+
+## D-041 — Add HSK 1 as a playground character collection
+**Decision (2026-09-23):** Expose the project's existing HSK 1 Simplified and Traditional character lists in a collapsible playground picker. Use the current HSK 2.0 lists from complete-hsk-vocabulary; generate a small static collection index and include only characters with a Make Me a Hanzi outline. Clicking an entry adds it to the active board, preserving the current scene. Show how many source-list characters lack outlines rather than offering unusable entries.
+
+**Why:** A curated curriculum set makes arbitrary character exploration approachable while reusing the existing board-add and lazy glyph-loading paths. The generated availability filter keeps the picker honest about which Unicode characters the physical playground can currently render.
+
+**Consequences:** The default playground board stays five characters. The HSK list is fetched only when opened; Simplified and Traditional remain separate because the lists include different standard characters and variants. Characters with outlines but no reviewed physical recipe can be added and moved, but cannot be torn apart.

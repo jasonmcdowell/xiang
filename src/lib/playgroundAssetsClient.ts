@@ -11,6 +11,20 @@ export type PlaygroundManifest = {
   compositionParents: Record<string, string[]>;
 };
 
+export type PlaygroundHsk1 = {
+  schemaVersion: 1;
+  standard: "HSK 2.0";
+  source: string;
+  license: string;
+  sets: Record<"simplified" | "traditional", PlaygroundHskSet>;
+};
+
+export type PlaygroundHskSet = {
+  total: number;
+  characters: string[];
+  unavailableCharacters: string[];
+};
+
 type GlyphFile = { character: string; strokes: string[] };
 type RecipeFile = {
   character: string;
@@ -77,6 +91,24 @@ export async function loadPlaygroundManifest() {
   if (manifest.schemaVersion !== 2 || !manifest.compositionParents)
     throw new Error("The playground character catalog is incomplete.");
   return manifest;
+}
+
+export async function loadPlaygroundHsk1(): Promise<PlaygroundHsk1> {
+  const catalog = await fetchJson<PlaygroundHsk1>("data/playground/hsk1.json");
+  if (
+    catalog.schemaVersion !== 1 ||
+    catalog.standard !== "HSK 2.0" ||
+    !catalog.sets?.simplified?.characters ||
+    !catalog.sets?.traditional?.characters ||
+    catalog.sets.simplified.total !==
+      catalog.sets.simplified.characters.length +
+        catalog.sets.simplified.unavailableCharacters.length ||
+    catalog.sets.traditional.total !==
+      catalog.sets.traditional.characters.length +
+        catalog.sets.traditional.unavailableCharacters.length
+  )
+    throw new Error("The HSK 1 character catalog is incomplete.");
+  return catalog;
 }
 
 /**

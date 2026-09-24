@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { STEP, type Point } from "@/lib/wobble";
 import {
   loadPlaygroundAssets,
+  loadPlaygroundHsk1,
   loadPlaygroundManifest,
+  type PlaygroundHsk1,
   type PlaygroundManifest,
 } from "@/lib/playgroundAssetsClient";
 import { drawConnections, drawLayers, drawMagnet } from "@/lib/wobbleDrawing";
@@ -38,6 +40,16 @@ export default function Playground() {
   const [ready, setReady] = useState(false);
   const [samples, setSamples] = useState(starterSamples);
   const [glyphCount, setGlyphCount] = useState<number | null>(null);
+  const [hskOpen, setHskOpen] = useState(false);
+  const [hskVariant, setHskVariant] = useState<"simplified" | "traditional">(
+    "simplified",
+  );
+  const [hskCharacters, setHskCharacters] = useState<PlaygroundHsk1 | null>(
+    null,
+  );
+  const [hskLoading, setHskLoading] = useState(false);
+  const [hskError, setHskError] = useState("");
+  const [hskAttempt, setHskAttempt] = useState(0);
   const [characterInput, setCharacterInput] = useState("");
   const [selectionBusy, setSelectionBusy] = useState(false);
   const [selectionError, setSelectionError] = useState("");
@@ -55,6 +67,27 @@ export default function Playground() {
     boardPreset: "starters",
     tileCount: 5,
   });
+
+  useEffect(() => {
+    if (!hskOpen || hskCharacters) return;
+    let disposed = false;
+    setHskLoading(true);
+    setHskError("");
+    void loadPlaygroundHsk1()
+      .then((catalog) => {
+        if (!disposed) setHskCharacters(catalog);
+      })
+      .catch(() => {
+        if (!disposed)
+          setHskError("The HSK 1 character list could not be loaded.");
+      })
+      .finally(() => {
+        if (!disposed) setHskLoading(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [hskOpen, hskCharacters, hskAttempt]);
 
   useEffect(() => {
     settingsRef.current = { softness, reduced, mode, visualStyle };
@@ -418,8 +451,11 @@ export default function Playground() {
         );
     }
   };
-  const addCharacterToBoard = async () => {
-    const character = characterInput.trim();
+  const addCharacterToBoard = async (
+    value = characterInput,
+    clearInput = false,
+  ) => {
+    const character = value.trim();
     if (Array.from(character).length !== 1) {
       setSelectionError("Enter one Chinese character.");
       return;
@@ -434,7 +470,7 @@ export default function Playground() {
       if (worldRef.current !== world) return;
       world.registerAssets(assets);
       const result = world.addCharacter(character);
-      if (result === "added") setCharacterInput("");
+      if (result === "added" && clearInput) setCharacterInput("");
       setStatus({
         phase: world.phase,
         message: world.message,
@@ -659,7 +695,7 @@ export default function Playground() {
                   type="button"
                   aria-label="Add to board"
                   disabled={!ready || selectionBusy}
-                  onClick={() => void addCharacterToBoard()}
+                  onClick={() => void addCharacterToBoard(characterInput, true)}
                 >
                   Add
                 </button>
@@ -673,6 +709,108 @@ export default function Playground() {
                   `${glyphCount?.toLocaleString() ?? "Thousands of"} glyph outlines load only when needed.`}
               </p>
             </form>
+          </section>
+
+          <section className={styles.hskPicker} aria-label="HSK 1 characters">
+            <button
+              className={styles.hskToggle}
+              type="button"
+              aria-expanded={hskOpen}
+              aria-controls="playground-hsk1-list"
+              onClick={() => setHskOpen((open) => !open)}
+            >
+              <span>HSK 1 character set</span>
+              <span aria-hidden="true">{hskOpen ? "−" : "+"}</span>
+            </button>
+            {hskOpen && (
+              <div className={styles.hskContents} id="playground-hsk1-list">
+                <div
+                  className={styles.hskVariants}
+                  role="group"
+                  aria-label="Writing system"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={hskVariant === "simplified"}
+                    onClick={() => setHskVariant("simplified")}
+                  >
+                    Simplified
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={hskVariant === "traditional"}
+                    onClick={() => setHskVariant("traditional")}
+                  >
+                    Traditional
+                  </button>
+                </div>
+                {hskLoading ? (
+                  <p className={styles.hskNote} role="status">
+                    Loading HSK 1…
+                  </p>
+                ) : hskError ? (
+                  <div className={styles.hskError} role="status">
+                    <span>{hskError}</span>
+                    <button
+                      type="button"
+                      onClick={() => setHskAttempt((attempt) => attempt + 1)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : hskCharacters ? (
+                  <>
+                    <p className={styles.hskNote} role="status">
+                      {hskCharacters.sets[hskVariant].characters.length}{" "}
+                      drawable characters
+                      {hskCharacters.sets[hskVariant].unavailableCharacters
+                        .length > 0 &&
+                        " · " +
+                          hskCharacters.sets[hskVariant].unavailableCharacters
+                            .length +
+                          " without stroke outlines"}
+                    </p>
+                    <div
+                      key={hskVariant}
+                      className={styles.hskCharacters}
+                      role="group"
+                      aria-label={
+                        (hskVariant === "simplified"
+                          ? "Simplified"
+                          : "Traditional") + " HSK 1 characters"
+                      }
+                    >
+                      {hskCharacters.sets[hskVariant].characters.map((char) => (
+                        <button
+                          key={char}
+                          type="button"
+                          aria-label={"Add " + char + " from HSK 1"}
+                          disabled={!ready || selectionBusy}
+                          onClick={() => void addCharacterToBoard(char)}
+                        >
+                          {char}
+                        </button>
+                      ))}
+                    </div>
+                    <p className={styles.hskNote}>
+                      Click a character to add it to the current board. HSK 2.0
+                      list.{" "}
+                      <a
+                        href={hskCharacters.source}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Source
+                      </a>{" "}
+                      ·{" "}
+                      <a href={publicAssetUrl(hskCharacters.license)}>
+                        MIT license
+                      </a>
+                    </p>
+                  </>
+                ) : null}
+              </div>
+            )}
           </section>
 
           <fieldset className={styles.modePicker}>

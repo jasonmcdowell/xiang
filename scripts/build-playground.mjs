@@ -167,6 +167,29 @@ const compositionIndex = Object.fromEntries(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, parents]) => [key, [...parents].sort()]),
 );
+const hsk1 = Object.fromEntries(
+  ["simp", "trad"].map((variant) => {
+    const sourceCharacters = [
+      ...new Set(
+        readFileSync(`public/data/charlists/hsk1_${variant}.txt`, "utf8")
+          .split(/\s+/u)
+          .filter(isHanCharacter),
+      ),
+    ];
+    return [
+      variant === "simp" ? "simplified" : "traditional",
+      {
+        total: sourceCharacters.length,
+        characters: sourceCharacters.filter((character) =>
+          graphics.has(character),
+        ),
+        unavailableCharacters: sourceCharacters.filter(
+          (character) => !graphics.has(character),
+        ),
+      },
+    ];
+  }),
+);
 const manifest = {
   schemaVersion: 2,
   source: "https://github.com/skishore/makemeahanzi",
@@ -182,6 +205,16 @@ const manifest = {
   compositionParents: compositionIndex,
 };
 writeFileSync(`${DATA_DIRECTORY}/scene.json`, `${JSON.stringify(manifest)}\n`);
+writeFileSync(
+  `${DATA_DIRECTORY}/hsk1.json`,
+  `${JSON.stringify({
+    schemaVersion: 1,
+    standard: "HSK 2.0",
+    source: "https://github.com/drkameleon/complete-hsk-vocabulary",
+    license: "/data/licenses/HSK-MIT.txt",
+    sets: hsk1,
+  })}\n`,
+);
 
 const xiangRecipe = JSON.parse(
   readFileSync(`${RECIPE_DIRECTORY}/${assetName("想")}`, "utf8"),
@@ -217,6 +250,12 @@ console.log(
       reviewedPairwiseGroupings: reviewedGroupingCount,
       incompleteOrUnsupportedMappings: ineligibleMappingCount,
       compatiblePairs: Object.keys(compositionIndex).length,
+      hsk1Simplified: hsk1.simplified.characters.length,
+      hsk1Traditional: hsk1.traditional.characters.length,
+      hsk1WithoutOutlines: {
+        simplified: hsk1.simplified.unavailableCharacters.length,
+        traditional: hsk1.traditional.unavailableCharacters.length,
+      },
     },
     null,
     2,
