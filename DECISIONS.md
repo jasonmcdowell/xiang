@@ -301,20 +301,20 @@ This file records key product/engineering decisions and the intent behind them. 
 
 **Consequences:** The existing characters remain visible throughout a drag, while the two child groups continue sharing the source tile face until the tear commits. The browser test checks the rendered-layer character list during a five-tile tear.
 
-## D-038 — Normalize composed characters to the smaller compatible scale
-**Decision (2026-09-23):** Infer a composed character's scale from both components' current size relative to their reviewed embedded layout. Use the smaller inferred parent scale and cap it at the standard playground glyph scale (0.36), independently for each axis.
+## D-038 — Normalize composed characters to the smaller compatible scale (superseded by D-043)
+**Decision (2026-09-23):** The initial implementation inferred a composed character's scale from both components' size relative to their embedded layout and used the smaller parent scale.
 
-**Why:** Components can arrive at different sizes, especially when a full-size intermediate character is combined with a smaller piece torn from a larger character. Averaging inferred sizes enlarged the result beyond its tile. The smaller scale fits both pieces without stretching either one, while the cap keeps independently composed characters at the same maximum ink size as starting characters.
+**Why:** This was intended to prevent strokes from spilling outside a tile when combining pieces of different displayed sizes.
 
-**Consequences:** Recombining children torn from a standard-size parent restores that scale. Recombining a full-size intermediate with an embedded smaller component shrinks the result to fit the standard tile instead of allowing its strokes to spill beyond the face. The 森 browser flow checks scale after its pairwise reconstruction.
+**Consequences:** Testing showed that a component which becomes its own tile should normalize to the same size as every other character. D-043 replaces this inference with one standard scale for starters, detached pieces, and compositions.
 
 ## D-039 — Lazy-load physical character data by glyph
 
-**Decision (2026-09-23):** Generate a compact playground manifest, one outline file per Make Me a Hanzi glyph, and one complete physical recipe file per eligible character. The manifest contains the character catalog and reverse index for eligible component pairs, but no stroke paths. Fetch an outline and its recipe when the character enters the board; fetch a candidate parent's data when compatible tiles or ink reach magnetic contact. A character with an outline but without a complete supported recipe can be explored and moved, but cannot be torn apart. Include every source character with graphics, and every complete two-child mapping supported by the current rules plus reviewed extensions; keep unreviewed three-or-more-child structures out of the physics rules.
+**Decision (2026-09-23, updated 2026-09-24):** Generate a compact playground manifest, one outline file per Make Me a Hanzi glyph, and one complete physical recipe file per eligible character. The manifest contains the character catalog and reverse index for eligible component pairs, but no stroke paths. Fetch an outline and recipe when a character enters the board, then prefetch its children’s recipes and the outlines of those recipes' children. Do not recurse through every descendant. When two free pieces on the board form an eligible pair, fetch their possible parent recipe and outline before they touch. A character with an outline but without a complete supported recipe can be explored and moved, but cannot be torn apart. Include every source character with graphics, and every complete two-child mapping supported by the current rules plus reviewed extensions; keep unreviewed three-or-more-child structures out of the physics rules.
 
 **Why:** The local source provides outlines for the dictionary corpus, but the SVG paths account for tens of megabytes. A handful of board pieces should not make the browser download and parse the full corpus. The existing decomposition and composition indices are much smaller and already serve as local lookup tables for the main game, so keep those eagerly available rather than adding a request per move or character.
 
-**Consequences:** `public/data/playground/scene.json` becomes a paths-free catalog and eligible-pair index. Outlines and precise stroke membership are served from codepoint-keyed files under `glyphs/` and `recipes/`. Browser requests are cached for the page session; missing outlines fail with an actionable playground message. The raw Make Me a Hanzi source remains gitignored.
+**Consequences:** `public/data/playground/scene.json` becomes a paths-free catalog and eligible-pair index. Outlines and precise stroke membership are served from codepoint-keyed files under `glyphs/` and `recipes/`. Browser requests are cached for the page session; missing outlines fail with an actionable playground message. The board's immediate decomposition recipes and board-reachable compositions are prefetched; deeper descendants remain lazy. The raw Make Me a Hanzi source remains gitignored.
 
 ## D-040 — Add arbitrary characters to the active playground board
 **Decision (2026-09-23):** Keep the existing **Explore** action for replacing the board with one character, and add a separate **Add to board** action that appends any drawable dictionary character without clearing the current scene. Place the new fixed tile in the nearest available non-overlapping space; report when a drag is active or no tile-sized space remains. On narrow two-column starter layouts, align the single tile in the last row to one side so another tile can be added in the open slot. Load its outline and any supported stroke recipe on demand. A custom board's Reset returns to the character set and tile positions that existed when the first character was added.
@@ -327,3 +327,38 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** A curated curriculum set makes arbitrary character exploration approachable while reusing the existing board-add and lazy glyph-loading paths. The generated availability filter keeps the picker honest about which Unicode characters the physical playground can currently render.
 
 **Consequences:** The default playground board stays five characters. The HSK list is fetched only when opened; Simplified and Traditional remain separate because the lists include different standard characters and variants. Characters with outlines but no reviewed physical recipe can be added and moved, but cannot be torn apart.
+
+## D-042 — Preload one interaction step ahead in the physical playground
+**Decision (2026-09-24):** Keep stroke and recipe assets split by character and cached for the page session. For each board character, load its immediate recipe, child outlines, and eligible child recipes plus those recipes' child outlines. Stop after that one lookahead step. Once multiple free tiles can legally compose, load every compatible parent recipe and outline from the pair index even while the tiles are apart. Do not recursively expand all descendants or preload compositions involving anchored tiles that the current physics rules cannot consume.
+
+**Why:** This preserves the lazy-data design while removing pauses from likely next actions: the immediate child can be torn again without waiting for its recipe, and compatible compositions are ready before their tiles touch.
+
+**Consequences:** Data stays local and glyph downloads remain tied to the board's one-step decomposition neighborhood or immediately composable characters. Preloading does not broaden which pairs can compose or which recipes are physically supported.
+
+## D-043 — Give every standalone and recomposed character a standard ink scale
+**Decision (2026-09-24):** Use the same default 0.36 glyph scale for starter, detached, added, and recomposed characters. Use embedded stroke geometry only to identify groups and preserve their relative placement during a tear or composition. Keep tile faces a constant 156 × 156 CSS pixels.
+
+**Why:** Preserving the component's fractional size inside its former parent leaves a small glyph on a full-size tile. Scale inference during composition can carry that inconsistency into later cycles.
+
+**Consequences:** A component normalizes to the standard glyph size when it becomes its own tile, and a composition always returns to the standard size. The tear preview still shows the original character's physical stroke layout before separation.
+
+## D-044 — Keep a focused dictionary entry visible during physical interactions
+**Decision (2026-09-24):** Add a persistent playground focus card showing the selected character, its pinyin, and its Make Me a Hanzi English definition. Focus follows the tile or ink first contacted; a successful tear focuses the detached character, and composition focuses the result. Reuse the existing compact `meta.json` dictionary index, which contains no stroke paths. Play a short synthesized pop only when a drag successfully commits a tear, after unlocking audio from the user's pointer gesture.
+
+**Why:** Players should be able to connect physical decomposition with pronunciation and meaning, and the newly freed character is the result of the tear gesture. A brief pop gives that state change clear tactile feedback without adding an external audio asset.
+
+**Consequences:** Focus remains visible until another character interaction changes it. The metadata index is fetched once per page, while the much larger stroke corpus remains lazy. A rolled-back pull stays silent.
+
+## D-045 — Add adjustable short-range tile repulsion
+**Decision (2026-09-24):** Enable a subtle tile-repulsion option by default. It applies a smooth, short-range force to movable tiles as their faces approach, including loose tiles in Fixed mode and all movable tiles in Weighted mode. A tile under direct pointer control is exempt; anchored Fixed-mode tiles remain anchored.
+
+**Why:** A narrow force field makes nearby pieces feel like physical objects while preserving player control and the Fixed mode's stationary anchors.
+
+**Consequences:** Players can turn repulsion off for a comparison. Compatible stroke magnets retain priority and can still guide pieces into composition.
+
+## D-046 — Support one-step double-tap unfolding on a tile
+**Decision (2026-09-24):** A stationary double-click or double-tap on the same character within 500 ms unfolds exactly its next supported two-part recipe. The newly created pieces use the standard scale and must fit without overlapping existing tiles; when there is no room or no reviewed recipe, keep the character intact and explain why.
+
+**Why:** A quick direct action provides an alternative to pulling a component while preserving the rule that each action advances only one reviewed decomposition step.
+
+**Consequences:** This does not recursively expand nested children. The focused entry changes to the first resulting component, which the player can immediately inspect or double-tap again.

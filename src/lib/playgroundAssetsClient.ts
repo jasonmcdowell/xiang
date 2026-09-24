@@ -25,6 +25,11 @@ export type PlaygroundHskSet = {
   unavailableCharacters: string[];
 };
 
+export type PlaygroundDictionary = Record<
+  string,
+  { pinyin: string[]; definition: string }
+>;
+
 type GlyphFile = { character: string; strokes: string[] };
 type RecipeFile = {
   character: string;
@@ -34,6 +39,7 @@ type RecipeFile = {
 
 const glyphCache = new Map<string, Promise<GlyphFile>>();
 const recipeCache = new Map<string, Promise<RecipeFile>>();
+let dictionaryCache: Promise<PlaygroundDictionary> | null = null;
 const codepointName = (character: string) => {
   const codepoint = character.codePointAt(0);
   if (codepoint === undefined || Array.from(character).length !== 1)
@@ -111,9 +117,22 @@ export async function loadPlaygroundHsk1(): Promise<PlaygroundHsk1> {
   return catalog;
 }
 
+export function loadPlaygroundDictionary(): Promise<PlaygroundDictionary> {
+  if (!dictionaryCache) {
+    dictionaryCache = fetchJson<PlaygroundDictionary>("data/meta.json").catch(
+      (error) => {
+        dictionaryCache = null;
+        throw error;
+      },
+    );
+  }
+  return dictionaryCache;
+}
+
 /**
- * Load only the current board's glyphs and recipes, plus explicitly requested
- * composition candidates. Stroke paths remain split into one static file per
+ * Load current board characters and one decomposition step ahead, plus
+ * explicitly requested composition candidates. The child recipes are not
+ * expanded recursively. Stroke paths remain split into one static file per
  * character and are shared by this page-session cache.
  */
 export async function loadPlaygroundAssets(
@@ -125,12 +144,24 @@ export async function loadPlaygroundAssets(
   const parents = [
     ...new Set([...visibleCharacters, ...compositionParents]),
   ].filter((character) => recipeCharacters.has(character));
-  const [visibleGlyphs, recipes] = await Promise.all([
+  const [visibleGlyphs, primaryRecipes] = await Promise.all([
     Promise.all([...new Set(visibleCharacters)].map(loadGlyph)),
     Promise.all(parents.map(loadRecipe)),
   ]);
+  const visibleSet = new Set(visibleCharacters);
+  const prefetchChildren = [
+    ...new Set(
+      primaryRecipes
+        .filter((recipe) => visibleSet.has(recipe.character))
+        .flatMap((recipe) => recipe.parts.map((part) => part.character)),
+    ),
+  ].filter(
+    (character) =>
+      recipeCharacters.has(character) && !parents.includes(character),
+  );
+  const childRecipes = await Promise.all(prefetchChildren.map(loadRecipe));
   const recipeFiles = await Promise.all(
-    recipes.map(async (recipe) => ({
+    [...primaryRecipes, ...childRecipes].map(async (recipe) => ({
       recipe,
       glyph:
         visibleGlyphs.find((glyph) => glyph.character === recipe.character) ??

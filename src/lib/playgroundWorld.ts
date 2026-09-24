@@ -36,6 +36,11 @@ export type PlaygroundAssets = {
   compositionParents?: Record<string, string[]>;
 };
 
+export type PlaygroundWorldEvent =
+  | { type: "tear"; character: string }
+  | { type: "compose"; character: string }
+  | { type: "unfold"; character: string };
+
 type PartAsset = PlaygroundAssets["recipes"][number]["parts"][number] & {
   embeddedGeometry: GlyphGeometry;
   standaloneGeometry: GlyphGeometry;
@@ -119,6 +124,8 @@ const TILE_OVERLAP_EPSILON = 0.01;
 const MAGNET_FULL_ALIGNMENT_DISTANCE = TILE_FACE_SIZE + TILE_CLEARANCE * 3;
 const MAGNET_FAR_ALIGNMENT_STRENGTH = 0.15;
 const MAGNET_FULL_STRENGTH_OVERLAP = 32;
+const TILE_REPULSION_RANGE = 22;
+const TILE_REPULSION_FORCE = 18;
 const compositionKey = (a: string, b: string) => [a, b].sort().join("|");
 
 export class PlaygroundWorld {
@@ -130,6 +137,7 @@ export class PlaygroundWorld {
   private customStarts: StartingTile[] | null = null;
   private preview: TearPreview | null = null;
   private contacts = new Map<number, Contact>();
+  private events: PlaygroundWorldEvent[] = [];
   private nextId = 1;
   private elapsed = 0;
   private readonly snapRadius = 12;
@@ -139,6 +147,7 @@ export class PlaygroundWorld {
   boardPreset: "starters" | "single" | "custom" = "starters";
   physicsMode: PhysicsMode = "fixed";
   visualStyle: VisualStyle = "raised";
+  tileRepulsion = true;
   softness = 0.55;
   reduced = false;
 
@@ -225,12 +234,6 @@ export class PlaygroundWorld {
       for (let j = i + 1; j < this.objects.length; j++) {
         const b = this.objects[j];
         if (!b.free) continue;
-        if (
-          !this.tileOverlap(a.surfaceBody, b.surfaceBody) &&
-          !this.heldInkOnFace(a, b) &&
-          !this.heldInkOnFace(b, a)
-        )
-          continue;
         for (const parent of index[compositionKey(a.char, b.char)] ?? [])
           if (!this.recipeByChar.has(parent)) candidates.add(parent);
       }
@@ -240,6 +243,16 @@ export class PlaygroundWorld {
 
   get pointerIds() {
     return [...this.contacts.keys()];
+  }
+
+  pointerTarget(pointerId: number) {
+    const contact = this.contacts.get(pointerId);
+    if (!contact) return null;
+    const object = this.objects.find(
+      (candidate) => candidate.id === contact.entityId,
+    );
+    const character = object?.char ?? this.preview?.source.char ?? null;
+    return character ? { id: contact.entityId, character } : null;
   }
 
   get isReady() {
@@ -324,6 +337,14 @@ export class PlaygroundWorld {
     this.visualStyle = style;
   }
 
+  setTileRepulsion(enabled: boolean) {
+    this.tileRepulsion = enabled;
+  }
+
+  takeEvents() {
+    return this.events.splice(0);
+  }
+
   private containsInk(
     point: Point,
     ink: Ink,
@@ -370,6 +391,7 @@ export class PlaygroundWorld {
       return;
     }
     this.cancelAll();
+    this.events.length = 0;
     this.boardPreset = "single";
     this.customStarts = null;
     this.selectedCharacter = char ?? this.selectedCharacter;
@@ -420,6 +442,49 @@ export class PlaygroundWorld {
       ? `${char} added as a new tile. Pull a component or combine it with another character.`
       : `${char} added as a new tile. It has an outline but no complete physical component mapping.`;
     return "added";
+  }
+
+  unfoldTile(
+    id: number,
+  ): "unfolded" | "busy" | "missing" | "unsupported" | "no-room" {
+    if (this.contacts.size || this.preview) {
+      this.message = "Finish the current drag before unfolding a tile.";
+      return "busy";
+    }
+    const source = this.objects.find((object) => object.id === id);
+    if (!source) return "missing";
+    if (!source.recipe) {
+      this.message = `${source.char} has no reviewed physical decomposition yet.`;
+      return "unsupported";
+    }
+    const placements = this.planUnfold(source);
+    if (!placements) {
+      this.message = "Move a tile to make room for both components.";
+      return "no-room";
+    }
+
+    const children = source.recipe.parts.map((part, index) =>
+      this.createObject(
+        part.char,
+        placements.centers[index],
+        true,
+        DEFAULT_GLYPH_SCALE,
+        DEFAULT_GLYPH_SCALE,
+      ),
+    );
+    this.objects = [
+      ...this.objects.filter((object) => object !== source),
+      ...children,
+    ];
+    this.setPhase(
+      "loose",
+      `Free pieces: ${source.recipe.parts[0].char} + ${source.recipe.parts[1].char}. Pull a stroke, double-tap a tile, or bring compatible pieces together.`,
+    );
+    this.events.push({
+      type: "unfold",
+      character: source.recipe.parts[0].char,
+    });
+    return "unfolded";
   }
 
   private findOpenTileCenter(): Point | null {
@@ -481,6 +546,7 @@ export class PlaygroundWorld {
     const starts = this.customStarts;
     if (!starts?.length) return;
     this.cancelAll();
+    this.events.length = 0;
     const halfSize = TILE_FACE_SIZE / 2;
     const fitCenter = (center: Point): Point => ({
       x: clamp(
@@ -512,6 +578,7 @@ export class PlaygroundWorld {
 
   resetStarters() {
     this.cancelAll();
+    this.events.length = 0;
     this.boardPreset = "starters";
     this.customStarts = null;
     this.selectedCharacter = "想";
@@ -894,6 +961,91 @@ export class PlaygroundWorld {
     );
   }
 
+  private planUnfold(source: SceneObject) {
+    const recipe = source.recipe;
+    if (!recipe) return null;
+    const layouts = recipe.parts.map((part) =>
+      componentLayout(
+        source.body,
+        part.embeddedGeometry,
+        part.standaloneGeometry,
+      ),
+    );
+    const parent = source.surfaceBody.pose();
+    const baseCenters = layouts.map((layout) => ({
+      x: parent.x + layout.bodyOffset.x,
+      y: parent.y + layout.bodyOffset.y,
+    }));
+    const [first, second] = baseCenters;
+    let dx = second.x - first.x;
+    let dy = second.y - first.y;
+    const face = { width: TILE_FACE_SIZE, height: TILE_FACE_SIZE };
+    // Leave a pixel of slack so the exact target doesn't fail clearance from
+    // floating-point rounding after the component vector is rescaled.
+    const required = TILE_FACE_SIZE + TILE_CLEARANCE + 1;
+    if (!this.facesClear(first, face, second, face)) {
+      const ratioX = Math.abs(dx) / required;
+      const ratioY = Math.abs(dy) / required;
+      if (ratioX === 0 && ratioY === 0) dx = required;
+      else {
+        const dominant = Math.max(ratioX, ratioY);
+        const factor = 1 / dominant;
+        dx *= factor;
+        dy *= factor;
+      }
+    }
+    const midpoint = {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    };
+    const splitCenters = [
+      { x: midpoint.x - dx / 2, y: midpoint.y - dy / 2 },
+      { x: midpoint.x + dx / 2, y: midpoint.y + dy / 2 },
+    ];
+    if (!this.facesClear(splitCenters[0], face, splitCenters[1], face))
+      return null;
+
+    const existing = this.objects.filter((object) => object !== source);
+    const step = Math.round(TILE_FACE_SIZE / 3);
+    const maxRing = Math.ceil(Math.max(this.width, this.height) / step);
+    const offsets: Point[] = [{ x: 0, y: 0 }];
+    for (let ring = 1; ring <= maxRing; ring++)
+      for (let x = -ring; x <= ring; x++)
+        for (let y = -ring; y <= ring; y++)
+          if (Math.max(Math.abs(x), Math.abs(y)) === ring)
+            offsets.push({ x: x * step, y: y * step });
+    offsets.sort(
+      (a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y),
+    );
+
+    for (const offset of offsets) {
+      const centers = splitCenters.map((center) => ({
+        x: center.x + offset.x,
+        y: center.y + offset.y,
+      }));
+      const withinBoard = centers.every(
+        (center) =>
+          center.x >= face.width / 2 &&
+          center.x <= this.width - face.width / 2 &&
+          center.y >= face.height / 2 &&
+          center.y <= this.height - face.height / 2,
+      );
+      if (!withinBoard) continue;
+      const clearOfExisting = centers.every((center) =>
+        existing.every((object) =>
+          this.facesClear(
+            center,
+            face,
+            object.surfaceBody.pose(),
+            this.tileFootprint(object.surfaceBody),
+          ),
+        ),
+      );
+      if (clearOfExisting) return { centers };
+    }
+    return null;
+  }
+
   private planTear(preview: TearPreview): TearPlan {
     const source = preview.source;
     const recipe = source.recipe!;
@@ -973,7 +1125,7 @@ export class PlaygroundWorld {
         .map((contact) => contact.group!),
     );
     const made = recipe.parts.map((part, index) => {
-      const { center, layout } = plan.placements[index];
+      const { center } = plan.placements[index];
       const groupBody =
         index === preview.partIndex ? preview.partBody : preview.restBody;
       const held = heldGroups.has(index);
@@ -981,8 +1133,8 @@ export class PlaygroundWorld {
         part.char,
         center,
         true,
-        layout.scaleX,
-        layout.scaleY,
+        DEFAULT_GLYPH_SCALE,
+        DEFAULT_GLYPH_SCALE,
         held ? { x: 0, y: 0 } : groupBody.meanVelocity(),
       );
     });
@@ -1032,6 +1184,10 @@ export class PlaygroundWorld {
       };
     }
     this.preview = null;
+    this.events.push({
+      type: "tear",
+      character: recipe.parts[preview.partIndex].char,
+    });
     this.setPhase(
       "loose",
       `Free pieces: ${recipe.parts[0].char} + ${recipe.parts[1].char}. Overlap the tiles or hold one piece's ink over the other tile to recombine.`,
@@ -1065,16 +1221,8 @@ export class PlaygroundWorld {
             baseLayoutB = partB.layout,
             // Choose the largest scale supported by both pieces, without
             // letting independently full-size pieces inflate their parent.
-            parentScaleX = Math.min(
-              DEFAULT_GLYPH_SCALE,
-              a.body.scaleX / baseLayoutA.scaleX,
-              b.body.scaleX / baseLayoutB.scaleX,
-            ),
-            parentScaleY = Math.min(
-              DEFAULT_GLYPH_SCALE,
-              a.body.scaleY / baseLayoutA.scaleY,
-              b.body.scaleY / baseLayoutB.scaleY,
-            ),
+            parentScaleX = DEFAULT_GLYPH_SCALE,
+            parentScaleY = DEFAULT_GLYPH_SCALE,
             layoutA = {
               ...baseLayoutA,
               parentOffset: {
@@ -1149,6 +1297,72 @@ export class PlaygroundWorld {
     return alignment * overlap;
   }
 
+  private applyTileRepulsion(dt: number, magneticPair: MagnetMatch | null) {
+    if (!this.tileRepulsion) return;
+    const directlyHeld = new Set(
+      [...this.contacts.values()].map((contact) => contact.entityId),
+    );
+    for (let i = 0; i < this.objects.length; i++)
+      for (let j = i + 1; j < this.objects.length; j++) {
+        const a = this.objects[i];
+        const b = this.objects[j];
+        const positionA = a.surfaceBody.pose();
+        const positionB = b.surfaceBody.pose();
+        const footprintA = this.tileFootprint(a.surfaceBody);
+        const footprintB = this.tileFootprint(b.surfaceBody);
+        const gapX =
+          (footprintA.width + footprintB.width) / 2 -
+          Math.abs(positionB.x - positionA.x);
+        const gapY =
+          (footprintA.height + footprintB.height) / 2 -
+          Math.abs(positionB.y - positionA.y);
+        const penetration =
+          Math.min(gapX, gapY) + TILE_REPULSION_RANGE;
+        if (penetration <= 0) continue;
+
+        let dx = positionB.x - positionA.x;
+        let dy = positionB.y - positionA.y;
+        let distance = Math.hypot(dx, dy);
+        if (distance < 0.001) {
+          dx = a.id < b.id ? 1 : -1;
+          dy = 0;
+          distance = 1;
+        }
+        const progress = clamp(penetration / TILE_REPULSION_RANGE, 0, 1);
+        const compatible =
+          magneticPair &&
+          ((magneticPair.a === a && magneticPair.b === b) ||
+            (magneticPair.a === b && magneticPair.b === a));
+        const force =
+          TILE_REPULSION_FORCE *
+          progress ** 2 *
+          (compatible ? 0.15 : 1);
+        const direction = { x: dx / distance, y: dy / distance };
+        const movableA = !a.surfaceBody.fixed && !directlyHeld.has(a.id);
+        const movableB = !b.surfaceBody.fixed && !directlyHeld.has(b.id);
+        if (movableA && movableB) {
+          for (const body of [a.body, a.surfaceBody])
+            body.addForce(
+              -direction.x * force * 0.5,
+              -direction.y * force * 0.5,
+              dt,
+            );
+          for (const body of [b.body, b.surfaceBody])
+            body.addForce(
+              direction.x * force * 0.5,
+              direction.y * force * 0.5,
+              dt,
+            );
+        } else if (movableA) {
+          for (const body of [a.body, a.surfaceBody])
+            body.addForce(-direction.x * force, -direction.y * force, dt);
+        } else if (movableB) {
+          for (const body of [b.body, b.surfaceBody])
+            body.addForce(direction.x * force, direction.y * force, dt);
+        }
+      }
+  }
+
   private magnetVisual(match: MagnetMatch) {
     const centerX =
         (match.anchorA.x -
@@ -1219,6 +1433,7 @@ export class PlaygroundWorld {
       ),
       composed,
     ];
+    this.events.push({ type: "compose", character: composed.char });
     for (const [pointerId, contact] of this.contacts) {
       if (contact.entityId !== match.a.id && contact.entityId !== match.b.id)
         continue;
@@ -1296,6 +1511,7 @@ export class PlaygroundWorld {
       return false;
     }
     const magneticPair = this.findMagnet();
+    this.applyTileRepulsion(dt, magneticPair);
     for (const object of this.objects) {
       const surfaceBefore = object.surfaceBody.pose();
       object.surfaceBody.step(dt);
@@ -1467,6 +1683,7 @@ export class PlaygroundWorld {
       coordinates: "CSS pixels from canvas top-left; x right, y down",
       physicsMode: this.physicsMode,
       visualStyle: this.visualStyle,
+      tileRepulsion: this.tileRepulsion,
       boardPreset: this.boardPreset,
       phase: this.phase,
       message: this.message,

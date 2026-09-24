@@ -29,6 +29,12 @@ const load = async (target = page) => {
       JSON.parse(window.render_game_to_text()).ready,
   );
   await advance(target, 0);
+  await target.locator('[aria-label="Character details for 想"]').waitFor();
+  await target.waitForFunction(() =>
+    document
+      .querySelector('[aria-label="Character details for 想"]')
+      ?.textContent?.includes("xiǎng"),
+  );
 };
 const screenPoint = (box, point) => ({
   x: box.x + point.x,
@@ -47,6 +53,11 @@ const assertUniformTiles = (characters, label) => {
     sizes[0][0] <= 160 && sizes[0][0] === sizes[0][1],
     `${label} tile face is compact and square`,
   );
+  for (const { char, scale } of characters)
+    assert.ok(
+      Math.abs(scale.x - 0.36) < 0.001 && Math.abs(scale.y - 0.36) < 0.001,
+      `${label} ${char} uses the standard ink scale, got ${JSON.stringify(scale)}`,
+    );
 };
 const assertNoTileOverlap = (characters, label) => {
   assert.ok(characters.length >= 2, label + " has multiple tiles");
@@ -118,6 +129,23 @@ const dragTileFace = async (
   }
   for (let i = 0; i < 6; i++) await advance(target, 1000 / 60);
   return state(target);
+};
+const doubleTapTile = async (
+  target,
+  box,
+  snapshot,
+  character,
+  objectId = null,
+) => {
+  const tile = snapshot.characters.find((object) =>
+    objectId === null ? object.char === character : object.id === objectId,
+  );
+  assert.ok(tile, `find ${character} tile to double-tap`);
+  await target.mouse.click(
+    box.x + tile.tile.center.x + tile.tile.width * 0.4,
+    box.y + tile.tile.center.y - tile.tile.height * 0.4,
+    { clickCount: 2, delay: 10 },
+  );
 };
 const moveHeldTileFace = async (
   target,
@@ -312,6 +340,33 @@ try {
   assert.equal(current.boardPreset, "starters");
   assert.equal(current.physicsMode, "fixed");
   assert.equal(current.visualStyle, "raised");
+  const initialDetails = await page
+    .locator('[aria-label="Character details for 想"]')
+    .innerText();
+  assert.match(initialDetails, /xiǎng/);
+  assert.match(initialDetails, /believe|wish/i);
+  const repulsionControl = page.getByRole("checkbox", {
+    name: /Tile repulsion/,
+  });
+  assert.equal(await repulsionControl.isChecked(), true);
+  await repulsionControl.uncheck();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).tileRepulsion === false,
+  );
+  const stickyFocusBox = await page
+    .locator('[aria-label="Character details for 想"]')
+    .boundingBox();
+  assert.ok(
+    stickyFocusBox &&
+      stickyFocusBox.y >= 0 &&
+      stickyFocusBox.y + stickyFocusBox.height <= 1000,
+    "the focused dictionary card stays visible while scrolling the side panel",
+  );
+  await repulsionControl.check();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).tileRepulsion === true,
+  );
+  await page.evaluate(() => window.scrollTo(0, 0));
   assert.equal(
     await page.getByText("A LITTLE EXPERIMENT IN FEELING").count(),
     0,
@@ -327,15 +382,125 @@ try {
     ["想", "相", "明", "休", "好"],
     "the playground starts with five decomposable characters",
   );
-  assert.equal(current.loadedRecipeCount, 5);
+  assert.ok(current.loadedRecipeCount >= 5 && current.loadedRecipeCount < 32);
   assert.ok(
-    current.loadedGlyphCount <= 16 && glyphRequests.size <= 16,
-    `the starter board should fetch only its local outlines, got ${current.loadedGlyphCount} glyphs / ${glyphRequests.size} requests`,
+    ["木", "目", "日", "月", "子"].every((character) =>
+      current.loadedRecipeCharacters.includes(character),
+    ),
+    "preload the eligible next-step recipes for the starter characters",
+  );
+  assert.ok(
+    current.loadedGlyphCount <= 24 && glyphRequests.size <= 24,
+    `the starter board should fetch only its one-step neighborhood, got ${current.loadedGlyphCount} glyphs / ${glyphRequests.size} requests`,
   );
   assert.equal(current.loadedGlyphCount < 100, true);
   assertNoTileOverlap(current.characters, "five starter board");
   assertUniformTiles(current.characters, "five starter board");
   assert.equal(current.characters[0].tile.width, 156);
+
+  const doubleTapLab = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  doubleTapLab.on("pageerror", (error) => errors.push(error.message));
+  doubleTapLab.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await load(doubleTapLab);
+  let doubleTapBox = await doubleTapLab.locator("canvas").boundingBox();
+  let doubleTapState = await state(doubleTapLab);
+  const doubleTapRepulsion = doubleTapLab.getByRole("checkbox", {
+    name: /Tile repulsion/,
+  });
+  await doubleTapRepulsion.uncheck();
+  await doubleTapLab.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).tileRepulsion === false,
+  );
+  await doubleTapLab.evaluate(() => window.scrollTo(0, 0));
+  doubleTapBox = await doubleTapLab.locator("canvas").boundingBox();
+  await doubleTapTile(doubleTapLab, doubleTapBox, doubleTapState, "想");
+  await doubleTapLab.waitForFunction(() => {
+    const game = JSON.parse(window.render_game_to_text());
+    return (
+      game.characters.length === 6 &&
+      game.characters.some((object) => object.char === "相") &&
+      game.characters.some((object) => object.char === "心")
+    );
+  });
+  doubleTapState = await state(doubleTapLab);
+  assert.ok(!doubleTapState.characters.some((object) => object.char === "想"));
+  assertNoTileOverlap(doubleTapState.characters, "double-tapped 想 split");
+  assertUniformTiles(doubleTapState.characters, "double-tapped 想 split");
+  const separatedPair = [
+    doubleTapState.characters.find((object) => object.char === "相" && object.free),
+    doubleTapState.characters.find((object) => object.char === "心" && object.free),
+  ];
+  assert.ok(separatedPair[0] && separatedPair[1]);
+  const distanceBeforeRepulsion = Math.hypot(
+    separatedPair[0].tile.center.x - separatedPair[1].tile.center.x,
+    separatedPair[0].tile.center.y - separatedPair[1].tile.center.y,
+  );
+  await doubleTapRepulsion.check();
+  await doubleTapLab.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).tileRepulsion === true,
+  );
+  await advance(doubleTapLab, 2000);
+  doubleTapState = await state(doubleTapLab);
+  const repelledPair = [
+    doubleTapState.characters.find((object) => object.char === "相" && object.free),
+    doubleTapState.characters.find((object) => object.char === "心" && object.free),
+  ];
+  assert.ok(repelledPair[0] && repelledPair[1]);
+  const distanceAfterRepulsion = Math.hypot(
+    repelledPair[0].tile.center.x - repelledPair[1].tile.center.x,
+    repelledPair[0].tile.center.y - repelledPair[1].tile.center.y,
+  );
+  assert.ok(
+    distanceAfterRepulsion > distanceBeforeRepulsion + 1,
+    `close loose tiles nudge apart (${distanceBeforeRepulsion} → ${distanceAfterRepulsion})`,
+  );
+  await doubleTapLab.evaluate(() => window.scrollTo(0, 0));
+  doubleTapBox = await doubleTapLab.locator("canvas").boundingBox();
+  await doubleTapLab.waitForFunction(() =>
+    JSON.parse(window.render_game_to_text()).loadedRecipeCharacters.includes(
+      "相",
+    ),
+  );
+  const nestedFreeXiang = doubleTapState.characters.find(
+    (object) => object.char === "相" && object.free,
+  );
+  assert.ok(nestedFreeXiang);
+  await doubleTapTile(
+    doubleTapLab,
+    doubleTapBox,
+    doubleTapState,
+    "相",
+    nestedFreeXiang.id,
+  );
+  await doubleTapLab.waitForFunction(() => {
+    const game = JSON.parse(window.render_game_to_text());
+    return (
+      game.characters.length === 7 &&
+      game.characters.filter((object) => object.char === "相").length === 1 &&
+      game.characters.some((object) => object.char === "木") &&
+      game.characters.some((object) => object.char === "目") &&
+      game.characters.some((object) => object.char === "心")
+    );
+  });
+  doubleTapState = await state(doubleTapLab);
+  assertNoTileOverlap(doubleTapState.characters, "nested double-tap split");
+  assertUniformTiles(doubleTapState.characters, "nested double-tap split");
+  assert.match(
+    await doubleTapLab
+      .locator('[aria-label^="Character details for "]')
+      .getAttribute("aria-label"),
+    /^Character details for (木|目)$/,
+  );
+  await doubleTapLab.screenshot({
+    path: "output/playground/double-tap-unfold.png",
+    fullPage: true,
+  });
+  await doubleTapLab.close();
+
   assert.deepEqual(
     ["想", "相", "明", "休", "好", "林", "森"].map((char) => char),
     await page
@@ -435,7 +600,7 @@ try {
   );
   current = await state();
   assert.equal(current.characters[0].decomposable, true);
-  assert.ok(current.loadedGlyphCount <= 16);
+  assert.ok(current.loadedGlyphCount <= 32);
   assert.ok(
     glyphRequests.has("4FE1"),
     "fetch the requested 信 outline on demand",
@@ -450,6 +615,12 @@ try {
     ["人", "言"],
     "a dynamically loaded dictionary character uses its precise tear mapping",
   );
+  await page.locator('[aria-label="Character details for 人"]').waitFor();
+  const tornDetails = await page
+    .locator('[aria-label="Character details for 人"]')
+    .innerText();
+  assert.match(tornDetails, /rén/);
+  assert.match(tornDetails, /person|people/i);
   await page.getByLabel("Any dictionary character").fill("一");
   await page.getByRole("button", { name: "Explore" }).click();
   await page.waitForFunction(
@@ -489,6 +660,7 @@ try {
     ["想", "相", "明", "休", "好"],
     "the new single-character experiments preserve the five-tile starter board",
   );
+  await page.evaluate(() => window.scrollTo(0, 0));
   const canvas = page.locator("canvas");
   let box = await canvas.boundingBox();
   assert.ok(
@@ -958,10 +1130,12 @@ try {
     path: "output/playground/ink-contact-magnet.png",
     fullPage: true,
   });
-  assert.equal(
-    inkState.characters.find((object) => object.char === "心").tile.center.x,
-    heartTileBefore.center.x,
-    "the source tile stays anchored during an ink-led recombination",
+  assert.ok(
+    Math.abs(
+      inkState.characters.find((object) => object.char === "心").tile.center.x -
+        heartTileBefore.center.x,
+    ) < 0.1,
+    "the source tile stays effectively anchored during an ink-led recombination",
   );
   inkState = await guideHeldHeartIntoPlace(inkReassembly, inkBox, inkState);
   assert.deepEqual(
@@ -1463,6 +1637,16 @@ try {
     (object) => object.char === "木",
   );
   assert.ok(looseSeed && looseWood);
+  await crossComposeLab.waitForFunction(() =>
+    JSON.parse(window.render_game_to_text()).loadedRecipeCharacters.includes(
+      "李",
+    ),
+  );
+  crossState = await state(crossComposeLab);
+  assert.ok(
+    crossState.loadedRecipeCharacters.includes("李"),
+    "preload 子 + 木's possible 李 recipe before their tiles meet",
+  );
   crossState = await dragTileFace(
     crossComposeLab,
     crossBox,
@@ -1470,11 +1654,6 @@ try {
     "子",
     { x: looseWood.tile.center.x + 88, y: looseWood.tile.center.y },
     looseSeed.id,
-  );
-  await crossComposeLab.waitForFunction(() =>
-    JSON.parse(window.render_game_to_text()).loadedRecipeCharacters.includes(
-      "李",
-    ),
   );
   crossState = await state(crossComposeLab);
   assert.equal(crossState.magnet.parent, "李");
@@ -1628,7 +1807,7 @@ try {
   await page.getByRole("button", { name: "Split 想", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Playground passed: lazy glyph requests and arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
+    "Playground passed: bounded one-step asset preloading and early composition candidates, normalized glyph size, pronunciation/definition focus and tear feedback, double-tap unfolding, tile repulsion, arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
   );
 } finally {
   await browser.close();
