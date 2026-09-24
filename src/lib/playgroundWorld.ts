@@ -273,8 +273,14 @@ export class PlaygroundWorld {
     return bodies;
   }
 
+  private effectiveSoftness() {
+    return this.visualStyle === "silk"
+      ? Math.max(this.softness, 0.72)
+      : this.softness;
+  }
+
   private setBodyMode(body: WobbleBody, free: boolean) {
-    body.softness = this.softness;
+    body.softness = this.effectiveSoftness();
     body.reduced = this.reduced;
     body.grabStrength = free ? 1.25 : this.physicsMode === "fixed" ? 0.8 : 0.42;
     body.setFixed(!free && this.physicsMode === "fixed");
@@ -338,6 +344,8 @@ export class PlaygroundWorld {
 
   setVisualStyle(style: VisualStyle) {
     this.visualStyle = style;
+    for (const body of this.allBodies())
+      body.softness = this.effectiveSoftness();
   }
 
   setTileRepulsion(enabled: boolean) {
@@ -358,7 +366,10 @@ export class PlaygroundWorld {
     const surfacePose = surface.pose();
     return hitInk(point, ink, body, (binding) => {
       const position = body.at(binding);
-      const reference = style !== "draped" ? position : body.idealAt(binding);
+      const reference =
+        style === "draped" || style === "silk"
+          ? body.idealAt(binding)
+          : position;
       return projectInkPoint(
         position,
         surface,
@@ -366,13 +377,17 @@ export class PlaygroundWorld {
         style,
         reference,
         surfacePose,
+        style === "silk"
+          ? this.objects.map((object) => object.surfaceBody)
+          : undefined,
       ).point;
     });
   }
 
   setSoftness(softness: number) {
     this.softness = clamp(softness, 0, 1);
-    for (const body of this.allBodies()) body.softness = this.softness;
+    for (const body of this.allBodies())
+      body.softness = this.effectiveSoftness();
   }
 
   setReducedMotion(reduced: boolean) {
@@ -710,7 +725,8 @@ export class PlaygroundWorld {
           surfaceBody,
         );
         const onTile =
-          this.visualStyle !== "flat" && hitTileFace(point, object.surfaceBody);
+          this.visualStyle !== "flat" &&
+          hitTileFace(point, object.surfaceBody, this.visualStyle);
         if (!onInk && !onTile) continue;
         // If no reviewed tear recipe exists, an ink drag cannot detach a
         // component. In raised/draped modes let that gesture move the whole

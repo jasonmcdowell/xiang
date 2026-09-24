@@ -696,7 +696,9 @@ export default function Playground() {
       ? "Flat"
       : visualStyle === "raised"
         ? "Raised"
-        : "Draped",
+        : visualStyle === "draped"
+          ? "Draped"
+          : "Silk",
   );
   const focusInfo = dictionary?.[focusedCharacter];
 
@@ -1109,6 +1111,16 @@ export default function Playground() {
                   onChange={() => setVisualStyle("draped")}
                 />
                 {t("Draped")} <span>{t("over the edge")}</span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="visual-style"
+                  value="silk"
+                  checked={visualStyle === "silk"}
+                  onChange={() => setVisualStyle("silk")}
+                />
+                {t("Silk")} <span>{t("down to the table")}</span>
               </label>
             </fieldset>
 

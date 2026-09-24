@@ -398,3 +398,11 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** Distinct table treatments let players compare the same physical character scene against different visual contexts. SVG backgrounds keep the slate silhouette and Go grids crisp at responsive sizes and remain a separate static layer beneath the existing physics canvas.
 
 **Consequences:** Board appearance is a local UI preference for the current Playground visit and is not coupled to game state or character tile material. The selector and its choices follow the site's English, Traditional Chinese, and Simplified Chinese interface setting.
+
+## D-052 — Add a silk-drape pseudo-3D Playground style
+
+**Decision (2026-09-24):** Add a fourth **Silk** surface style alongside Flat, Raised, and Draped. Keep the same square tile-face footprint and existing 2D scene physics, but draw a deeper mahjong-like sidewall. Project ink toward tabletop height when it stretches beyond a supporting tile face, then let it rise back onto the top of any other tile it crosses. Add a soft ground shadow under dropped ink and slightly favor floppy lattice response in this mode. Use the same projection for drawing and stroke hit-testing; keep the effect deterministic, client-side, and independent of decomposition and composition rules.
+
+**Why:** The existing Draped mode bends strokes over their own tile edge, but does not convey a taller tile, a component trailing on the tabletop, or ink climbing onto another tile. A height-based screen-space projection can test that tactile concept without introducing a 3D renderer or changing board geometry.
+
+**Consequences:** Silk is an explicit visual and softness experiment. Tile collision and placement continue to use their existing face footprints; the visible sidewall is a 2.5D extrusion and the ground shadow is an approximation rather than 3D lighting or cloth simulation.

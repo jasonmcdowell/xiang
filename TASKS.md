@@ -119,8 +119,8 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [ ] Physical Safari testing of tearing and magnetic feel on the user's iPhone/iPad.
 
 ## Follow-up — 2.5D tile and stroke materials
-- [x] Compare Flat, Raised, and Draped rendering on the playground's reviewed characters.
-- [x] Verify visible ink hit-testing while raised and while draped over the tile edge.
+- [x] Compare Flat, Raised, Draped, and Silk pseudo-3D rendering on the playground's reviewed characters.
+- [x] Verify visible ink hit-testing while raised, draped over the tile edge, and dropped to the table in Silk mode.
 - [x] Make bare tile face a whole-character grip in tile styles; preserve Fixed anchoring and weighted movement.
 - [ ] Tune bevel depth, stroke relief, and ground shadow from desktop and phone playtests before considering actual 3D rendering.
 

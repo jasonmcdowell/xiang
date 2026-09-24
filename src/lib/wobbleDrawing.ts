@@ -3,9 +3,11 @@ import type { Tether } from "./wobbleComponents";
 
 const clamp = (value: number, low: number, high: number) =>
   Math.max(low, Math.min(high, value));
+const SILK_DEPTH_X = 8;
+const SILK_DEPTH_Y = 24;
 
 export type Ink = Binding[][];
-export type VisualStyle = "flat" | "raised" | "draped";
+export type VisualStyle = "flat" | "raised" | "draped" | "silk";
 export type InkLayer = {
   ink: Ink;
   body: WobbleBody;
@@ -125,7 +127,11 @@ export function hitInk(
   return false;
 }
 
-export function hitTileFace(point: Point, body: WobbleBody) {
+export function hitTileFace(
+  point: Point,
+  body: WobbleBody,
+  style: VisualStyle = "raised",
+) {
   const pose = body.pose();
   const dx = point.x - pose.x;
   const dy = point.y - pose.y;
@@ -137,8 +143,11 @@ export function hitTileFace(point: Point, body: WobbleBody) {
   const halfHeight = (body.size * body.scaleY + 38) / 2;
   const onFace =
     Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
+  const offsetX = style === "silk" ? SILK_DEPTH_X : 5;
+  const offsetY = style === "silk" ? SILK_DEPTH_Y : 11;
   const onOffsetBase =
-    Math.abs(localX - 5) <= halfWidth && Math.abs(localY - 11) <= halfHeight;
+    Math.abs(localX - offsetX) <= halfWidth &&
+    Math.abs(localY - offsetY) <= halfHeight;
   return onFace || onOffsetBase;
 }
 
@@ -149,6 +158,7 @@ export function projectInkPoint(
   style: VisualStyle,
   reference: Point,
   surfacePose = surface.pose(),
+  supportSurfaces: WobbleBody[] = [surface],
 ) {
   if (style === "flat") return { point, drape: 0 };
   if (style === "raised")
@@ -156,6 +166,44 @@ export function projectInkPoint(
       point: { x: point.x, y: point.y - 3 - inkBody.lift * 7 },
       drape: 0,
     };
+
+  if (style === "silk") {
+    let nearestOutside = Number.POSITIVE_INFINITY;
+    let support = 0;
+    for (const candidate of supportSurfaces) {
+      const pose = candidate === surface ? surfacePose : candidate.pose();
+      const dx = point.x - pose.x;
+      const dy = point.y - pose.y;
+      const c = Math.cos(pose.angle);
+      const s = Math.sin(pose.angle);
+      const localX = c * dx + s * dy;
+      const localY = -s * dx + c * dy;
+      const halfWidth = (candidate.size * candidate.scaleX + 38) / 2 - 3;
+      const halfHeight = (candidate.size * candidate.scaleY + 38) / 2 - 3;
+      const outside = Math.max(
+        Math.abs(localX) - halfWidth,
+        Math.abs(localY) - halfHeight,
+        0,
+      );
+      if (outside < nearestOutside) nearestOutside = outside;
+      if (outside === 0) support = 1;
+    }
+    const edgeT = clamp(nearestOutside / 19, 0, 1);
+    const edgeDrop = edgeT * edgeT * (3 - 2 * edgeT);
+    const pulled = Math.hypot(point.x - reference.x, point.y - reference.y);
+    const pullT = clamp((pulled - 14) / 46, 0, 1);
+    const pullDrop = pullT * pullT * (3 - 2 * pullT);
+    const drop = Math.max(edgeDrop, pullDrop * (1 - support));
+    // Screen-space height: ink sinks below the tile top at its own edge, but
+    // rises again when its path crosses the top of another tile.
+    return {
+      point: {
+        x: point.x + SILK_DEPTH_X * drop,
+        y: point.y + SILK_DEPTH_Y * drop,
+      },
+      drape: drop,
+    };
+  }
 
   const dx = point.x - surfacePose.x;
   const dy = point.y - surfacePose.y;
@@ -214,12 +262,15 @@ function drawMahjongTile(
   ctx: CanvasRenderingContext2D,
   body: WobbleBody,
   ratio: number,
+  style: VisualStyle,
 ) {
   const pose = body.pose();
   const width = body.size * body.scaleX + 38;
   const height = body.size * body.scaleY + 38;
   const left = -width / 2;
   const top = -height / 2;
+  const sideX = style === "silk" ? SILK_DEPTH_X : 5;
+  const sideY = style === "silk" ? SILK_DEPTH_Y : 11;
   ctx.save();
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.translate(pose.x, pose.y);
@@ -227,11 +278,39 @@ function drawMahjongTile(
   ctx.shadowColor = "rgba(48, 43, 31, .24)";
   ctx.shadowBlur = 17;
   ctx.shadowOffsetX = 6;
-  ctx.shadowOffsetY = 17;
-  roundedRect(ctx, left + 5, top + 11, width, height, 20);
+  ctx.shadowOffsetY = sideY + 6;
+  roundedRect(ctx, left + sideX, top + sideY, width, height, 20);
   ctx.fillStyle = "#a89069";
   ctx.fill();
   ctx.shadowColor = "transparent";
+
+  if (style === "silk") {
+    const side = ctx.createLinearGradient(
+      0,
+      top + height - 2,
+      0,
+      top + height + sideY,
+    );
+    side.addColorStop(0, "#b29968");
+    side.addColorStop(0.45, "#90754e");
+    side.addColorStop(1, "#6e5d43");
+    ctx.beginPath();
+    ctx.moveTo(left + 14, top + height - 2);
+    ctx.lineTo(left + width - 14, top + height - 2);
+    ctx.lineTo(left + width - 14 + sideX, top + height - 2 + sideY);
+    ctx.lineTo(left + 14 + sideX, top + height - 2 + sideY);
+    ctx.closePath();
+    ctx.fillStyle = side;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(left + width - 2, top + 15);
+    ctx.lineTo(left + width - 2, top + height - 15);
+    ctx.lineTo(left + width - 2 + sideX, top + height - 15 + sideY);
+    ctx.lineTo(left + width - 2 + sideX, top + 15 + sideY);
+    ctx.closePath();
+    ctx.fillStyle = "#8b724e";
+    ctx.fill();
+  }
 
   const face = ctx.createLinearGradient(left, top, left + width, top + height);
   face.addColorStop(0, "#fffdf5");
@@ -281,6 +360,9 @@ export function drawLayers(
 ) {
   const body = layers[0]?.surfaceBody ?? layers[0]?.body;
   if (!body) return;
+  const supportSurfaces = [
+    ...new Set(layers.map((layer) => layer.surfaceBody ?? layer.body)),
+  ];
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, body.width, body.height);
   const drawnSurfaces = new Set<WobbleBody>();
@@ -288,13 +370,15 @@ export function drawLayers(
     const surface = layer.surfaceBody ?? layer.body;
     const surfacePose = surface.pose();
     if (style !== "flat" && !drawnSurfaces.has(surface)) {
-      drawMahjongTile(ctx, surface, ratio);
+      drawMahjongTile(ctx, surface, ratio, style);
       drawnSurfaces.add(surface);
     }
     const projected = makeInkPath(layer.ink, (binding) => {
       const point = layer.body.at(binding);
       const reference =
-        style !== "draped" ? point : layer.body.idealAt(binding);
+        style === "draped" || style === "silk"
+          ? layer.body.idealAt(binding)
+          : point;
       return projectInkPoint(
         point,
         surface,
@@ -302,6 +386,7 @@ export function drawLayers(
         style,
         reference,
         surfacePose,
+        supportSurfaces,
       );
     });
     const { path } = projected;
@@ -343,6 +428,35 @@ export function drawLayers(
       ctx.shadowOffsetY = layer.body.lift * 7;
       ctx.fillStyle = "#254538";
       ctx.fill(path);
+    } else if (style === "silk") {
+      if (projected.drape > 0.015) {
+        ctx.save();
+        ctx.globalAlpha = 0.11 + projected.drape * 0.19;
+        ctx.shadowColor = "rgba(22, 25, 21, .42)";
+        ctx.shadowBlur = 5 + projected.drape * 8;
+        ctx.shadowOffsetX = 5 + projected.drape * 2;
+        ctx.shadowOffsetY = 8 + projected.drape * 12;
+        ctx.fillStyle = "#1d2923";
+        ctx.fill(path);
+        ctx.restore();
+      }
+      if (projected.drape > 0.025) {
+        ctx.save();
+        ctx.translate(0, 1 + projected.drape * 2);
+        ctx.fillStyle = "#17372f";
+        ctx.fill(path);
+        ctx.restore();
+      }
+      ctx.shadowColor = "rgba(19, 27, 22, .16)";
+      ctx.shadowBlur = 3 + projected.drape * 4;
+      ctx.shadowOffsetY = 2 + projected.drape * 4;
+      ctx.fillStyle = "#254538";
+      ctx.fill(path);
+      ctx.save();
+      ctx.strokeStyle = "rgba(226, 235, 216, .2)";
+      ctx.lineWidth = 1;
+      ctx.stroke(path);
+      ctx.restore();
     } else {
       ctx.shadowColor = `rgba(33, 55, 40, ${layer.body.lift * 0.2})`;
       ctx.shadowBlur = 14 * layer.body.lift;
@@ -354,7 +468,9 @@ export function drawLayers(
     for (const grab of layer.body.grabs.values()) {
       const point = layer.body.at(grab.binding);
       const reference =
-        style !== "draped" ? point : layer.body.idealAt(grab.binding);
+        style === "draped" || style === "silk"
+          ? layer.body.idealAt(grab.binding)
+          : point;
       const pin = projectInkPoint(
         point,
         surface,
@@ -362,6 +478,7 @@ export function drawLayers(
         style,
         reference,
         surfacePose,
+        supportSurfaces,
       ).point;
       ctx.beginPath();
       ctx.arc(pin.x, pin.y, 5, 0, Math.PI * 2);

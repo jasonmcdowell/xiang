@@ -854,7 +854,7 @@ try {
   current = await state();
   assert.equal(current.characters.length, 5);
   assertNoTileOverlap(current.characters, "restored five starter board");
-  for (const style of ["flat", "raised", "draped"]) {
+  for (const style of ["flat", "raised", "draped", "silk"]) {
     await page.locator(`input[name="visual-style"][value="${style}"]`).check();
     await page.waitForFunction(
       (value) => JSON.parse(window.render_game_to_text()).visualStyle === value,
@@ -893,6 +893,29 @@ try {
   );
   await page.screenshot({
     path: "output/playground/draped-held.png",
+    fullPage: true,
+  });
+  await page.mouse.up();
+  assert.equal((await state()).phase, "whole");
+  await page.locator('input[name="visual-style"][value="silk"]').check();
+  current = await state();
+  box = await canvas.boundingBox();
+  await drag(page, box, current.componentGrabPoints["相"][4], 5, 9, 1);
+  current = await state();
+  assert.equal(current.visualStyle, "silk");
+  assert.equal(current.phase, "stretching");
+  assert.equal(
+    current.activeContacts[0]?.interaction,
+    "component",
+    "silk projection preserves ink hit testing during a pull",
+  );
+  assert.deepEqual(
+    [current.characters[0].tile.center.x, current.characters[0].tile.center.y],
+    [tileHome.x, tileHome.y],
+    "silk ink pulling leaves the source tile in place",
+  );
+  await page.screenshot({
+    path: "output/playground/silk-held.png",
     fullPage: true,
   });
   await page.mouse.up();
@@ -1888,7 +1911,7 @@ try {
   await page.getByRole("button", { name: "Split 想", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Playground passed: bounded one-step asset preloading and early composition candidates, normalized glyph size, pronunciation/definition focus and tear feedback, double-tap unfolding, tile repulsion, arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
+    "Playground passed: bounded one-step asset preloading and early composition candidates, normalized glyph size, pronunciation/definition focus and tear feedback, double-tap unfolding, tile repulsion, arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped/silk rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
   );
 } finally {
   await browser.close();

@@ -45,13 +45,13 @@ This is both a learning tool and a puzzle game, inspired by Scrabble/Rummikub �
 
 ### Playground extensions (2026-09-22)
 - The playground now supports a small reviewed set of component tears and relative-layout magnetic assembly. These remain an isolated experiment, separate from the primary game's rules.
-- A Flat/Raised/Draped surface-style selector compares plain ink, raised strokes on a shallow character tile, and strokes that flow over the tile edge toward tabletop height.
+- A Flat/Raised/Draped/Silk surface-style selector compares plain ink, raised strokes, edge-draped ink, and a taller pseudo-3D tile whose floppy ink drops to the table and rises across other tile tops.
 - Raised and Draped characters use equal 184 × 184 CSS-pixel tile faces. Ink pulls leave the face anchored; only a bare-face drag targets the tile, with whole-character movement available in Weighted mode.
 - After release, ink drifts back to its own tile's center and orientation unless a compatible pair is being magnetically aligned; this return never moves the tile or automatically recombines characters.
 - In Raised and Draped styles, a component becomes a new tile only after the seam is stretched and its planned 184 × 184 face clears its sibling and all existing faces by at least 12 CSS pixels; compatible pieces remain catchable by the gentle magnetic field after separation.
 - The phone-sized playground board stays tall enough to pull two tiles apart vertically without clipping either new face.
 - Keep this visual experiment 2D and client-side. It should not delay or change the core Explore and Timed Challenge experience.
-- A board-material selector below the playground canvas compares a bamboo tabletop, one rough-edged slate slab, a full 19×19 wooden Go board, a compact 9×9 Go board, and a rice-paper scroll. Board materials remain independent of the Flat/Raised/Draped character surface selector and physics.
+- A board-material selector below the playground canvas compares a bamboo tabletop, one rough-edged slate slab, a full 19×19 wooden Go board, a compact 9×9 Go board, and a rice-paper scroll. Board materials remain independent of the character surface selector and physics.
 
 ---
 
