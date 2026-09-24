@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   output: "export",
   trailingSlash: true,
   basePath,
+  allowedDevOrigins: ["sage-imac.local"],
   turbopack: { root: process.cwd() },
 };
 
