@@ -56,6 +56,7 @@ type SceneObject = {
   surfaceBody: WobbleBody;
   ink: Ink;
   free: boolean;
+  componentPiece: boolean;
   recipe: Recipe | null;
   tileFollowsInkUntilRelease: boolean;
   tileFollowOffset: Point | null;
@@ -286,6 +287,7 @@ export class PlaygroundWorld {
     scaleX = DEFAULT_GLYPH_SCALE,
     scaleY = DEFAULT_GLYPH_SCALE,
     velocity: Point = { x: 0, y: 0 },
+    componentPiece = false,
   ): SceneObject {
     const strokes = this.assets.glyphs[char];
     if (!strokes) throw new Error(`Missing playground glyph for ${char}.`);
@@ -310,6 +312,7 @@ export class PlaygroundWorld {
       surfaceBody,
       ink: skinStrokes(strokes, body),
       free,
+      componentPiece,
       recipe: this.recipeByChar.get(char) ?? null,
       tileFollowsInkUntilRelease: false,
       tileFollowOffset: null,
@@ -470,6 +473,8 @@ export class PlaygroundWorld {
         true,
         DEFAULT_GLYPH_SCALE,
         DEFAULT_GLYPH_SCALE,
+        { x: 0, y: 0 },
+        true,
       ),
     );
     this.objects = [
@@ -707,7 +712,13 @@ export class PlaygroundWorld {
         const onTile =
           this.visualStyle !== "flat" && hitTileFace(point, object.surfaceBody);
         if (!onInk && !onTile) continue;
-        if (!onInk && onTile) {
+        // If no reviewed tear recipe exists, an ink drag cannot detach a
+        // component. In raised/draped modes let that gesture move the whole
+        // tile instead of only stretching the strokes and snapping them back.
+        if (
+          onTile &&
+          (!onInk || (!object.recipe && !object.componentPiece))
+        ) {
           body = object.body;
           entityId = object.id;
           tileGrip = true;
@@ -1136,6 +1147,7 @@ export class PlaygroundWorld {
         DEFAULT_GLYPH_SCALE,
         DEFAULT_GLYPH_SCALE,
         held ? { x: 0, y: 0 } : groupBody.meanVelocity(),
+        true,
       );
     });
     const sourceCenter = source.body.pose();

@@ -336,6 +336,7 @@ mkdirSync("output/playground", { recursive: true });
 try {
   await load();
   let current = await state();
+  let box;
   assert.equal(current.character, "想");
   assert.equal(current.boardPreset, "starters");
   assert.equal(current.physicsMode, "fixed");
@@ -633,6 +634,38 @@ try {
     glyphRequests.has("4E00"),
     "fetch a drawable character without a tear recipe",
   );
+  await page.getByLabel("Any dictionary character").fill("女");
+  await page.getByRole("button", { name: "Explore" }).click();
+  await page.waitForFunction(
+    () => JSON.parse(window.render_game_to_text()).character === "女",
+  );
+  current = await state();
+  assert.equal(current.characters[0].decomposable, false);
+  await page.locator('input[name="physics-mode"][value="weighted"]').check();
+  current = await state();
+  box = await page.locator("canvas").boundingBox();
+  const womanInkGrip = current.characters[0].grabPoints[0];
+  const womanTileHome = current.characters[0].tile.center;
+  await page.mouse.move(box.x + womanInkGrip.x, box.y + womanInkGrip.y);
+  await page.mouse.down();
+  current = await state();
+  assert.equal(
+    current.activeContacts[0]?.interaction,
+    "tile",
+    "ink on a non-decomposable 女 grabs the whole tile",
+  );
+  await page.mouse.move(box.x + womanInkGrip.x + 32, box.y + womanInkGrip.y + 18);
+  await advance(page, 1000 / 60);
+  current = await state();
+  assert.ok(
+    Math.hypot(
+      current.characters[0].tile.center.x - womanTileHome.x,
+      current.characters[0].tile.center.y - womanTileHome.y,
+    ) > 1,
+    "dragging 女 ink moves its tile instead of leaving the face behind",
+  );
+  await page.mouse.up();
+  await page.locator('input[name="physics-mode"][value="fixed"]').check();
   await page.getByRole("button", { name: "林", exact: true }).click();
   await page.waitForFunction(
     () => JSON.parse(window.render_game_to_text()).character === "林",
@@ -662,7 +695,7 @@ try {
   );
   await page.evaluate(() => window.scrollTo(0, 0));
   const canvas = page.locator("canvas");
-  let box = await canvas.boundingBox();
+  box = await canvas.boundingBox();
   assert.ok(
     box.height >= 780,
     "the desktop gameboard uses more vertical space",

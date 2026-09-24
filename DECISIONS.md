@@ -362,3 +362,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** A quick direct action provides an alternative to pulling a component while preserving the rule that each action advances only one reviewed decomposition step.
 
 **Consequences:** This does not recursively expand nested children. The focused entry changes to the first resulting component, which the player can immediately inspect or double-tap again.
+
+## D-047 — Make non-decomposable character ink a whole-tile grip
+**Decision (2026-09-24):** In raised and draped styles, dragging ink on a standalone character without a reviewed physical decomposition moves the whole tile. Ink on a loose piece produced by a tear or unfold remains an ink grip so it can be dragged into a composition. For characters with a reviewed recipe, dragging ink continues to pull its mapped component; dragging the blank face moves the tile.
+
+**Why:** A base character such as 女 has no detachable component, so interpreting an ink drag as a deformation leaves the player with no reliable way to move it when the strokes cover most of the tile face.
+
+**Consequences:** Base characters remain draggable from their visible strokes while preserving component tearing for decomposable characters and ink-led recombination for loose components. Flat ink-only mode keeps its existing stroke-drag behavior because it has no visible tile surface.
