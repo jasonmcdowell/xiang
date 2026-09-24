@@ -1,7 +1,10 @@
 export type BoardMaterial = "bamboo" | "slate" | "go19" | "go9" | "rice";
 
 const slateEdge =
-  "M74 55 L150 62 L224 49 L305 59 L385 45 L468 54 L553 43 L631 57 L716 48 L798 61 L875 50 L943 67 L935 145 L950 218 L939 299 L952 383 L941 465 L955 548 L941 635 L952 715 L938 798 L948 880 L925 946 L849 938 L773 953 L694 941 L615 954 L533 942 L451 954 L368 940 L286 950 L203 936 L125 947 L55 923 L62 847 L46 769 L58 689 L43 609 L56 526 L44 444 L58 361 L45 278 L61 197 L50 119 Z";
+  "M96 243 L109 223 C128 197 166 189 188 171 L210 176 C236 151 274 153 300 134 L328 145 C353 117 389 120 414 103 L444 116 C468 98 500 108 522 123 L551 113 C577 124 599 139 617 157 L648 150 C672 158 693 175 713 182 L739 175 C766 189 784 206 805 220 L829 222 C850 238 866 252 876 273 L902 281 L922 303 L912 326 L925 347 C916 368 894 379 871 390 L860 412 C842 427 818 432 800 449 L780 466 C760 486 737 493 715 505 L696 525 C675 541 648 548 627 559 L606 577 C585 592 560 596 540 604 L517 623 C490 638 463 650 437 644 L412 654 C386 648 366 632 341 625 L319 610 C292 604 272 586 249 571 L229 552 C204 542 185 523 167 504 L151 482 C128 472 111 455 98 436 L96 412 C79 395 78 376 68 358 L79 336 L64 314 L82 294 L76 274 L94 255 Z";
+const slateFaceTransform = "translate(0 -26) scale(1 1.415)";
+const slateSideTransform = "translate(0 30) scale(1 1.415)";
+const slateShadowTransform = "translate(0 45) scale(1 1.415)";
 
 function GoGrid({ compact = false }: { compact?: boolean }) {
   const count = compact ? 9 : 19;
@@ -120,31 +123,36 @@ export default function PlaygroundBoard({
           />
         </pattern>
         <linearGradient id="slate-face" x1="0" y1="0" x2="0.9" y2="1">
-          <stop stopColor="#747e81" />
-          <stop offset="0.52" stopColor="#606b70" />
-          <stop offset="1" stopColor="#515d63" />
+          <stop stopColor="#858a87" />
+          <stop offset="0.5" stopColor="#727976" />
+          <stop offset="1" stopColor="#626966" />
         </linearGradient>
         <pattern
           id="slate-grain"
-          width="126"
-          height="98"
+          width="370"
+          height="330"
           patternUnits="userSpaceOnUse"
         >
           <path
-            d="M9 21l38-9m31 53 34-8M21 84l19-4m44-54 24-5"
+            d="M9 28c27-8 48-2 73-7M126 35l52-6M245 19c33 4 62-6 98-1M44 98l42-3m17 1 29 2M198 115c28-5 50-2 69-6M292 152l44-4M28 224c39 2 60-6 91-4M166 264l56-8M276 300c30-2 51 1 72-3"
             fill="none"
-            stroke="#d2d4ce"
-            strokeOpacity="0.13"
-            strokeWidth="2"
+            stroke="#d8d9d4"
+            strokeOpacity="0.1"
+            strokeWidth="2.5"
           />
-          <circle cx="69" cy="28" r="1.8" fill="#e2e1d9" fillOpacity="0.18" />
-          <circle cx="13" cy="58" r="1.2" fill="#e2e1d9" fillOpacity="0.2" />
+          <path d="M52 122l42-5m105 53 30-4M203 17l47-3M82 287l35-4m172-116 28-3" fill="none" stroke="#3f4948" strokeOpacity="0.1" strokeWidth="2" />
+          <circle cx="87" cy="65" r="2" fill="#e2e1d9" fillOpacity="0.13" />
+          <circle cx="247" cy="119" r="1.5" fill="#e2e1d9" fillOpacity="0.14" />
+          <circle cx="321" cy="244" r="1.5" fill="#434b49" fillOpacity="0.12" />
         </pattern>
         <clipPath id="slate-clip">
-          <path d={slateEdge} />
+          <path d={slateEdge} transform={slateFaceTransform} />
         </clipPath>
-        <filter id="slate-shadow" x="-12%" y="-12%" width="124%" height="130%">
-          <feGaussianBlur stdDeviation="13" />
+        <clipPath id="slate-side-clip">
+          <path d={slateEdge} transform={slateSideTransform} />
+        </clipPath>
+        <filter id="slate-shadow" x="-12%" y="-12%" width="124%" height="136%">
+          <feGaussianBlur stdDeviation="15" />
         </filter>
         <linearGradient id="rice-paper" x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="#f4ebd5" />
@@ -191,15 +199,20 @@ export default function PlaygroundBoard({
         <g>
           <rect width="1000" height="1000" fill="#d8d1c4" />
           <rect width="1000" height="1000" fill="#eeeae0" fillOpacity="0.28" />
-          <path d={slateEdge} transform="translate(0 17)" fill="#26333a" opacity="0.3" filter="url(#slate-shadow)" />
-          <path d={slateEdge} fill="#38454b" />
-          <g clipPath="url(#slate-clip)">
-            <rect width="1000" height="1000" fill="url(#slate-face)" />
-            <rect width="1000" height="1000" fill="url(#slate-grain)" />
-            <path d="M76 180c190-52 346 33 501-6s267-16 369 7M46 783c222-28 389 14 602-13s280-20 344 2" fill="none" stroke="#d8dbd5" strokeOpacity="0.12" strokeWidth="3" />
+          <path d={slateEdge} transform={slateShadowTransform} fill="#263238" opacity="0.38" filter="url(#slate-shadow)" />
+          <path d={slateEdge} transform={slateSideTransform} fill="#3d4748" />
+          <g clipPath="url(#slate-side-clip)" fill="none" stroke="#252e30" strokeOpacity="0.5">
+            <path d="M70 911c155 12 260-9 396 5s280-9 473 4" strokeWidth="8" />
+            <path d="M70 930c161 8 264-7 404 4s267-7 465 2" strokeWidth="5" />
+            <path d="M70 947c170 8 286-5 421 3s257-4 447 1" strokeWidth="3" />
           </g>
-          <path d={slateEdge} fill="none" stroke="#343f45" strokeWidth="9" strokeOpacity="0.62" />
-          <path d="M80 73 L153 78 L224 66 L305 76 L385 62 L468 71 L553 60 L631 74 L716 65 L798 78 L875 67 L923 82 L918 148 L933 218 L922 299 L935 383 L924 465 L938 548 L924 635 L935 715 L921 798 L931 880 L909 921 L849 916 L773 931 L694 919 L615 932 L533 920 L451 932 L368 918 L286 928 L203 914 L125 925 L79 906 L85 847 L69 769 L81 689 L66 609 L79 526 L67 444 L81 361 L68 278 L84 197 Z" fill="none" stroke="#c3c8c5" strokeOpacity="0.48" strokeWidth="2.5" />
+          <path d={slateEdge} transform={slateFaceTransform} fill="url(#slate-face)" stroke="#485250" strokeWidth="7" strokeLinejoin="round" />
+          <g clipPath="url(#slate-clip)">
+            <rect width="1000" height="1000" fill="url(#slate-grain)" />
+            <path d="M75 397c111-19 184 8 272-5m46-2c124-21 245 7 391-9M76 554c121 9 196-14 314-3m66 5c138 12 252-16 455-2M132 708c82-14 141 8 214-7m185-10c106 8 188-8 305 3" fill="none" stroke="#e0e1da" strokeOpacity="0.11" strokeWidth="3" />
+            <path d="M118 465c74 4 126-9 192-6m401-28c48-2 90 2 143 5M189 668c52-4 91-2 139 3m366-15c52-3 93 1 142 3" fill="none" stroke="#424a48" strokeOpacity="0.1" strokeWidth="2" />
+          </g>
+          <path d={slateEdge} transform={slateFaceTransform} fill="none" stroke="#b4bab4" strokeOpacity="0.28" strokeWidth="2" strokeLinejoin="round" />
         </g>
       )}
 
