@@ -383,3 +383,10 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** Dense glyphs can cover most of a small tile face, so requiring a blank-face double-tap makes the shortcut difficult or impossible to use.
 
 **Consequences:** Stroke pulls still tear on movement; only two quick stationary taps unfold. A browser regression taps an actual mapped stroke to verify the same one-step, non-overlapping result.
+
+## D-050 — Add a persistent three-language site interface
+**Decision (2026-09-24):** Offer English, Traditional Chinese, and Simplified Chinese across the game, playground, dictionary lab, and privacy page. English is the first-visit default. Save only the selected interface language in `localStorage` under `xiang-language`; update the document language and tab title when it changes. Keep Make Me a Hanzi pronunciation and definition records in their source form (English definitions), and keep all game rules and character data local.
+
+**Why:** The character game should be usable by English and Chinese readers, and the choice should remain in effect across routes and visits without a language-selection server request.
+
+**Consequences:** The app now uses browser storage for this preference, while game state remains memory-only and no gameplay activity is persisted or sent. The privacy page states this distinction. The static Pages build needs no route or API changes; the language browser check covers both scripts, messages, route changes, and reload persistence.

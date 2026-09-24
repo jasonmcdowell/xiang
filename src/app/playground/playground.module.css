@@ -597,8 +597,11 @@
   }
 
   .header {
-    height: 66px;
+    height: auto;
+    min-height: 66px;
+    flex-wrap: wrap;
     gap: 16px;
+    padding: 8px 0;
   }
 
   .edition {
@@ -646,6 +649,12 @@
     min-height: auto;
     overflow-y: visible;
     overscroll-behavior: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    gap: 8px 12px;
   }
 }
 

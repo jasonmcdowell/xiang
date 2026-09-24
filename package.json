@@ -15,6 +15,7 @@
     "build:game-data": "npm run build:data && npm run build:charlists && npm run build:pools && npm run build:chid-scrambles",
     "test": "tsx --test tests/*.test.cjs tests/*.test.ts",
     "test:browser": "node scripts/test-browser.mjs",
+    "test:language": "node scripts/test-language.mjs",
     "test:motion": "node scripts/test-motion.mjs",
     "test:recipes": "node scripts/test-recipes.mjs",
     "test:drag": "node scripts/test-drag.mjs",

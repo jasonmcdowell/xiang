@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { LanguageProvider } from "@/components/LanguageProvider";
+import SiteFooter from "@/components/SiteFooter";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "Xiang 想 — A little character play",
@@ -12,10 +13,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
-        <footer className="privacy-footer">
-          <Link href="/privacy">Privacy</Link>
-        </footer>
+        <LanguageProvider>
+          {children}
+          <SiteFooter />
+        </LanguageProvider>
       </body>
     </html>
   );

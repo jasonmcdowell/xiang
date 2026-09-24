@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import LanguagePicker from "@/components/LanguagePicker";
+import { useLanguage } from "@/components/LanguageProvider";
+import { translateRuntimeText } from "@/lib/language";
 import { publicAssetUrl } from "@/lib/publicAssetUrl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STEP, type Point } from "@/lib/wobble";
@@ -36,6 +39,7 @@ const DOUBLE_TAP_INTERVAL_MS = 500;
 const starterSamples = ["想", "相", "明", "休", "好", "林", "森"];
 
 export default function Playground() {
+  const { t, language } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<PlaygroundWorld | null>(null);
@@ -681,10 +685,17 @@ export default function Playground() {
   };
   const boardDescription =
     status.boardPreset === "starters"
-      ? `${status.tileCount} starter characters`
+      ? t("{count} starter characters", { count: status.tileCount })
       : status.boardPreset === "custom"
-        ? `${status.tileCount} custom characters`
+        ? t("{count} custom characters", { count: status.tileCount })
         : status.character;
+  const surfaceName = t(
+    visualStyle === "flat"
+      ? "Flat"
+      : visualStyle === "raised"
+        ? "Raised"
+        : "Draped",
+  );
   const focusInfo = dictionary?.[focusedCharacter];
 
   return (
@@ -696,20 +707,21 @@ export default function Playground() {
             xiang<span className={styles.dot}>.</span>
           </span>
         </Link>
-        <span className={styles.edition}>THE PLAYGROUND / PHYSICS LAB</span>
+        <span className={styles.edition}>
+          {t("THE PLAYGROUND / PHYSICS LAB")}
+        </span>
         <Link href="/" className={styles.back}>
-          Back to the game ↗
+          {t("Back to the game ↗")}
         </Link>
+        <LanguagePicker />
       </header>
       <div className={styles.workspace}>
         <section
           className={styles.boardColumn}
-          aria-label="Character gameboard"
+          aria-label={t("Character gameboard")}
         >
           <section className={styles.intro}>
-            <h1>
-              Pull it apart. Bring it back together<span>.</span>
-            </h1>
+            <h1>{t("Pull it apart. Bring it back together.")}</h1>
           </section>
 
           <div className={styles.stage} ref={stageRef}>
@@ -717,96 +729,107 @@ export default function Playground() {
               ref={canvasRef}
               tabIndex={0}
               role="application"
-              aria-label={`Physical ${boardDescription} playground in ${visualStyle} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.`}
+              aria-label={t(
+                "Physical {board} playground in {style} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.",
+                { board: boardDescription, style: surfaceName },
+              )}
               aria-describedby="playground-keys"
             />
             {!ready && (
               <div className={styles.loading} role="status">
                 {error ? (
                   <>
-                    <span>The character outlines couldn’t load.</span>
+                    <span>{t("The character outlines couldn’t load.")}</span>
                     <button
                       onClick={() => {
                         setError(false);
                         setAttempt((value) => value + 1);
                       }}
                     >
-                      Try again
+                      {t("Try again")}
                     </button>
                   </>
                 ) : (
-                  "The characters are taking shape…"
+                  t("The characters are taking shape…")
                 )}
               </div>
             )}
             <span className={styles.characterNote} aria-live="polite">
               <strong>
                 {status.boardPreset !== "single"
-                  ? `${status.tileCount} tiles`
+                  ? t("{count} tiles", { count: status.tileCount })
                   : status.character}
               </strong>{" "}
-              <i>{status.phase}</i>
+              <i>{t(status.phase)}</i>
             </span>
             <span className={styles.stageNote} aria-hidden="true">
-              A little give. A little gravity.
+              {t("A little give. A little gravity.")}
             </span>
           </div>
           <p className={styles.liveMessage} role="status" aria-live="polite">
-            {status.message}
+            {translateRuntimeText(language, status.message)}
           </p>
         </section>
 
-        <aside className={styles.sidebar} aria-label="Playground controls">
+        <aside className={styles.sidebar} aria-label={t("Playground controls")}>
           <section className={styles.instructions}>
-            <p className={styles.panelLabel}>HOW TO PLAY</p>
-            <h2>Pull, place, recombine</h2>
+            <p className={styles.panelLabel}>{t("HOW TO PLAY")}</p>
+            <h2>{t("Pull, place, recombine")}</h2>
             <p>
-              Start with five characters. Pull a mapped stroke group away until
-              it becomes its own tile. Hold ink over a compatible tile or
-              overlap the tiles to guide the strokes back together.
+              {t(
+                "Start with five characters. Pull a mapped stroke group away until it becomes its own tile. Hold ink over a compatible tile or overlap the tiles to guide the strokes back together.",
+              )}
             </p>
             <p>
-              Double-tap a character or one of its strokes to unfold one
-              supported step.
+              {t(
+                "Double-tap a character or one of its strokes to unfold one supported step.",
+              )}
             </p>
             <p>
-              Drag a blank tile face to move the whole character. Fixed keeps it
-              centered; Weighted gives it more movement.
+              {t(
+                "Drag a blank tile face to move the whole character. Fixed keeps it centered; Weighted gives it more movement.",
+              )}
             </p>
             <p>
-              Add any drawable dictionary character to keep building the board,
-              or explore it alone to replace the current scene.
+              {t(
+                "Add any drawable dictionary character to keep building the board, or explore it alone to replace the current scene.",
+              )}
             </p>
           </section>
 
           <section
             className={styles.focusCard}
-            aria-label={`Character details for ${focusedCharacter}`}
+            aria-label={t("Character details for {char}", {
+              char: focusedCharacter,
+            })}
             aria-live="polite"
           >
             <span className={styles.focusCharacter} aria-hidden="true">
               {focusedCharacter}
             </span>
             <div className={styles.focusDetails}>
-              <span className={styles.focusLabel}>IN FOCUS</span>
+              <span className={styles.focusLabel}>{t("IN FOCUS")}</span>
               <p className={styles.focusPinyin}>
                 {focusInfo?.pinyin.join(" · ") ||
                   (dictionary
-                    ? "Pronunciation unavailable"
-                    : "Loading pronunciation…")}
+                    ? t("Pronunciation unavailable")
+                    : t("Loading pronunciation…"))}
               </p>
               <p className={styles.focusDefinition}>
                 {focusInfo?.definition ||
                   (dictionary
-                    ? "Definition unavailable"
-                    : "Loading definition…")}
+                    ? t("Definition unavailable")
+                    : t("Loading definition…"))}
               </p>
             </div>
           </section>
 
           <div className={styles.sidebarScroll}>
-            <section className={styles.boardPicker} aria-label="Starting board">
-              <span className={styles.controlLabel}>Starting board</span>
+            <section
+              className={styles.boardPicker}
+              aria-label={t("Starting board")}
+            >
+              <span className={styles.controlLabel}>{t("Starting board")}</span>
               <button
                 className={styles.starterButton}
                 type="button"
@@ -814,12 +837,17 @@ export default function Playground() {
                 aria-pressed={status.boardPreset === "starters"}
                 onClick={selectStarters}
               >
-                Five starters
+                {t("Five starters")}
               </button>
             </section>
 
-            <section className={styles.samples} aria-label="Try one character">
-              <span className={styles.controlLabel}>Try a character</span>
+            <section
+              className={styles.samples}
+              aria-label={t("Try a character")}
+            >
+              <span className={styles.controlLabel}>
+                {t("Try a character")}
+              </span>
               <div className={styles.sampleButtons}>
                 {samples.map((char) => (
                   <button
@@ -844,7 +872,7 @@ export default function Playground() {
                 }}
               >
                 <label htmlFor="playground-character">
-                  Any dictionary character
+                  {t("Any dictionary character")}
                 </label>
                 <div>
                   <input
@@ -857,17 +885,17 @@ export default function Playground() {
                     aria-describedby="playground-character-help"
                   />
                   <button type="submit" disabled={!ready || selectionBusy}>
-                    {selectionBusy ? "Loading…" : "Explore"}
+                    {selectionBusy ? t("Loading…") : t("Explore")}
                   </button>
                   <button
                     type="button"
-                    aria-label="Add to board"
+                    aria-label={t("Add to board")}
                     disabled={!ready || selectionBusy}
                     onClick={() =>
                       void addCharacterToBoard(characterInput, true)
                     }
                   >
-                    Add
+                    {t("Add")}
                   </button>
                 </div>
                 <p
@@ -875,13 +903,21 @@ export default function Playground() {
                   role="status"
                   aria-live="polite"
                 >
-                  {selectionError ||
-                    `${glyphCount?.toLocaleString() ?? "Thousands of"} glyph outlines load only when needed.`}
+                  {selectionError
+                    ? translateRuntimeText(language, selectionError)
+                    : glyphCount === null
+                      ? t("Thousands of glyph outlines load only when needed.")
+                      : t("{count} glyph outlines load only when needed.", {
+                          count: glyphCount.toLocaleString(),
+                        })}
                 </p>
               </form>
             </section>
 
-            <section className={styles.hskPicker} aria-label="HSK 1 characters">
+            <section
+              className={styles.hskPicker}
+              aria-label={t("HSK 1 characters")}
+            >
               <button
                 className={styles.hskToggle}
                 type="button"
@@ -889,7 +925,7 @@ export default function Playground() {
                 aria-controls="playground-hsk1-list"
                 onClick={() => setHskOpen((open) => !open)}
               >
-                <span>HSK 1 character set</span>
+                <span>{t("HSK 1 character set")}</span>
                 <span aria-hidden="true">{hskOpen ? "−" : "+"}</span>
               </button>
               {hskOpen && (
@@ -897,48 +933,48 @@ export default function Playground() {
                   <div
                     className={styles.hskVariants}
                     role="group"
-                    aria-label="Writing system"
+                    aria-label={t("Writing system")}
                   >
                     <button
                       type="button"
                       aria-pressed={hskVariant === "simplified"}
                       onClick={() => setHskVariant("simplified")}
                     >
-                      Simplified
+                      {t("Simplified")}
                     </button>
                     <button
                       type="button"
                       aria-pressed={hskVariant === "traditional"}
                       onClick={() => setHskVariant("traditional")}
                     >
-                      Traditional
+                      {t("Traditional")}
                     </button>
                   </div>
                   {hskLoading ? (
                     <p className={styles.hskNote} role="status">
-                      Loading HSK 1…
+                      {t("Loading HSK 1…")}
                     </p>
                   ) : hskError ? (
                     <div className={styles.hskError} role="status">
-                      <span>{hskError}</span>
+                      <span>{t(hskError)}</span>
                       <button
                         type="button"
                         onClick={() => setHskAttempt((attempt) => attempt + 1)}
                       >
-                        Retry
+                        {t("Retry")}
                       </button>
                     </div>
                   ) : hskCharacters ? (
                     <>
                       <p className={styles.hskNote} role="status">
                         {hskCharacters.sets[hskVariant].characters.length}{" "}
-                        drawable characters
+                        {t("drawable characters")}
                         {hskCharacters.sets[hskVariant].unavailableCharacters
                           .length > 0 &&
                           " · " +
                             hskCharacters.sets[hskVariant].unavailableCharacters
                               .length +
-                            " without stroke outlines"}
+                            ` ${t("without stroke outlines")}`}
                       </p>
                       <div
                         key={hskVariant}
@@ -946,8 +982,8 @@ export default function Playground() {
                         role="group"
                         aria-label={
                           (hskVariant === "simplified"
-                            ? "Simplified"
-                            : "Traditional") + " HSK 1 characters"
+                            ? t("Simplified")
+                            : t("Traditional")) + ` ${t("HSK 1 characters")}`
                         }
                       >
                         {hskCharacters.sets[hskVariant].characters.map(
@@ -955,7 +991,7 @@ export default function Playground() {
                             <button
                               key={char}
                               type="button"
-                              aria-label={"Add " + char + " from HSK 1"}
+                              aria-label={t("Add {char} from HSK 1", { char })}
                               disabled={!ready || selectionBusy}
                               onClick={() => void addCharacterToBoard(char)}
                             >
@@ -965,18 +1001,19 @@ export default function Playground() {
                         )}
                       </div>
                       <p className={styles.hskNote}>
-                        Click a character to add it to the current board. HSK
-                        2.0 list.{" "}
+                        {t(
+                          "Click a character to add it to the current board. HSK 2.0 list.",
+                        )}{" "}
                         <a
                           href={hskCharacters.source}
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Source
+                          {t("Source")}
                         </a>{" "}
                         ·{" "}
                         <a href={publicAssetUrl(hskCharacters.license)}>
-                          MIT license
+                          {t("MIT license")}
                         </a>
                       </p>
                     </>
@@ -986,7 +1023,7 @@ export default function Playground() {
             </section>
 
             <fieldset className={styles.modePicker}>
-              <legend>Character weight</legend>
+              <legend>{t("Character weight")}</legend>
               <label>
                 <input
                   type="radio"
@@ -995,7 +1032,7 @@ export default function Playground() {
                   checked={mode === "fixed"}
                   onChange={() => setMode("fixed")}
                 />
-                Fixed <span>stays centered</span>
+                {t("Fixed")} <span>{t("stays centered")}</span>
               </label>
               <label>
                 <input
@@ -1005,24 +1042,25 @@ export default function Playground() {
                   checked={mode === "weighted"}
                   onChange={() => setMode("weighted")}
                 />
-                Weighted <span>moves with resistance</span>
+                {t("Weighted")} <span>{t("moves with resistance")}</span>
               </label>
             </fieldset>
 
             <fieldset className={styles.modePicker}>
-              <legend>Tile interaction</legend>
+              <legend>{t("Tile interaction")}</legend>
               <label>
                 <input
                   type="checkbox"
                   checked={tileRepulsion}
                   onChange={(event) => setTileRepulsion(event.target.checked)}
                 />
-                Tile repulsion <span>loose faces nudge apart</span>
+                {t("Tile repulsion")}{" "}
+                <span>{t("loose faces nudge apart")}</span>
               </label>
             </fieldset>
 
             <fieldset className={styles.stylePicker}>
-              <legend>Surface style</legend>
+              <legend>{t("Surface style")}</legend>
               <label>
                 <input
                   type="radio"
@@ -1031,7 +1069,7 @@ export default function Playground() {
                   checked={visualStyle === "flat"}
                   onChange={() => setVisualStyle("flat")}
                 />
-                Flat <span>ink only</span>
+                {t("Flat")} <span>{t("ink only")}</span>
               </label>
               <label>
                 <input
@@ -1041,7 +1079,7 @@ export default function Playground() {
                   checked={visualStyle === "raised"}
                   onChange={() => setVisualStyle("raised")}
                 />
-                Raised <span>embossed</span>
+                {t("Raised")} <span>{t("embossed")}</span>
               </label>
               <label>
                 <input
@@ -1051,15 +1089,18 @@ export default function Playground() {
                   checked={visualStyle === "draped"}
                   onChange={() => setVisualStyle("draped")}
                 />
-                Draped <span>over the edge</span>
+                {t("Draped")} <span>{t("over the edge")}</span>
               </label>
             </fieldset>
 
-            <section className={styles.controls} aria-label="Physics controls">
+            <section
+              className={styles.controls}
+              aria-label={t("Physics controls")}
+            >
               <label className={styles.softness}>
-                Softness
+                {t("Softness")}
                 <input
-                  aria-label="Softness"
+                  aria-label={t("Softness")}
                   type="range"
                   min="0"
                   max="100"
@@ -1069,20 +1110,20 @@ export default function Playground() {
                 />
                 <span>
                   {reduced
-                    ? "Still"
+                    ? t("Still")
                     : softness < 34
-                      ? "Firm"
+                      ? t("Firm")
                       : softness > 70
-                        ? "Floppy"
-                        : "Supple"}
+                        ? t("Floppy")
+                        : t("Supple")}
                 </span>
               </label>
               <div className={styles.actions}>
                 <button disabled={!ready} onClick={nudge}>
-                  Give it a nudge <span aria-hidden="true">↝</span>
+                  {t("Give it a nudge")} <span aria-hidden="true">↝</span>
                 </button>
                 <button disabled={!ready} onClick={reset}>
-                  Reset <span aria-hidden="true">↺</span>
+                  {t("Reset")} <span aria-hidden="true">↺</span>
                 </button>
               </div>
             </section>
@@ -1094,18 +1135,19 @@ export default function Playground() {
                   checked={reduced}
                   onChange={(event) => setReduced(event.target.checked)}
                 />{" "}
-                Reduce motion
+                {t("Reduce motion")}
               </label>
               <p id="playground-keys">
-                Keyboard: arrows to nudge · R to reset · F for fullscreen ·
-                Escape to release.
+                {t(
+                  "Keyboard: arrows to nudge · R to reset · F for fullscreen · Escape to release.",
+                )}
               </p>
             </footer>
           </div>
         </aside>
       </div>
       <p className={styles.credit}>
-        Reviewed outlines and component matches:{" "}
+        {t("Reviewed outlines and component matches: ")}{" "}
         <a
           href="https://github.com/skishore/makemeahanzi"
           target="_blank"
@@ -1115,7 +1157,7 @@ export default function Playground() {
         </a>{" "}
         · © 1999 Arphic Technology · Freely redistributable under the{" "}
         <a href={publicAssetUrl("data/licenses/ARPHICPL.TXT")}>
-          Arphic Public License
+          {t("Arphic Public License")}
         </a>
         , without warranty.
       </p>

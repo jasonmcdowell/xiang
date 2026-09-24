@@ -42,7 +42,7 @@ Acceptance: engine tests and real-browser split/recombine, duplicate, invalid, c
 - [x] +3 seconds and +1 point per composition; +1 per first discovery that run.
 - [x] Pause/resume, hidden-tab pause, and chronological delayed-tick handling.
 - [x] Timeout wins when simultaneous with arrival; no gameplay changes after game over.
-- [x] Fresh run and session-only best score; no browser storage required.
+- [x] Fresh run and session-only best score; store only the site language preference in browser storage.
 - [x] Sticky clock while scrolling, bounded character-board height.
 
 Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pause, overflow, timeout, reset, and delayed-tick equivalence. Browser plays through both end conditions.
@@ -57,7 +57,7 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Final browser verification against the refreshed production server, including real touch input, the live clock, hidden-tab pause, and session-only scoring.
 - [x] GitHub Pages static export with project-site base path and direct-route output.
 - [x] GitHub Actions workflow builds, checks, and deploys only the static `out/` artifact.
-- [x] Remove app-controlled persistent browser storage and add a privacy notice.
+- [x] Keep gameplay data session-only and add a privacy notice; later add only the requested language preference storage (D-050).
 - [x] Verify public Git history is a clean snapshot with no raw Make Me a Hanzi blobs or personal author email.
 - [x] Change `jasonmcdowell/xiang` to public, enable Pages Actions publishing, and verify live routes/assets.
 - [x] Publish the Xiang project card from the personal showcase source to `jasonmcdowell.github.io`.

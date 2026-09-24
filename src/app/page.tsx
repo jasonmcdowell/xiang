@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import LanguagePicker from "@/components/LanguagePicker";
+import { useLanguage } from "@/components/LanguageProvider";
+import { translateRuntimeText } from "@/lib/language";
 import { useDragCombine } from "@/hooks/useDragCombine";
 import { useTileMotion } from "@/hooks/useTileMotion";
 import { loadIndices, type IndicesData } from "@/lib/indicesClient";
@@ -32,19 +35,21 @@ function Glyph({ children }: { children: React.ReactNode }) {
   );
 }
 function Brand() {
+  const { t } = useLanguage();
   return (
-    <Link className="brand" href="/" aria-label="Xiang home">
+    <Link className="brand" href="/" aria-label={t("Xiang home")}>
       <span className="brand-mark">
         <Glyph>想</Glyph>
       </span>
       <span>
         xiang<span className="brand-dot">.</span>
       </span>
-      <span className="brand-caption">A LITTLE CHARACTER PLAY</span>
+      <span className="brand-caption">{t("A LITTLE CHARACTER PLAY")}</span>
     </Link>
   );
 }
 export default function Home() {
+  const { t } = useLanguage();
   const [data, setData] = useState<IndicesData | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -68,18 +73,19 @@ export default function Home() {
     return (
       <main className="loading-page">
         <Brand />
+        <LanguagePicker />
         <div className="loading-glyph">
           <Glyph>想</Glyph>
         </div>
         <h1>
           {error
-            ? "The characters couldn’t load."
-            : "A little room for discovery."}
+            ? t("The characters couldn’t load.")
+            : t("A little room for discovery.")}
         </h1>
         <p>
           {error
-            ? "Check your connection and try again."
-            : "Setting out your tiles…"}
+            ? t("Check your connection and try again.")
+            : t("Setting out your tiles…")}
         </p>
         {error && (
           <button
@@ -89,7 +95,7 @@ export default function Home() {
               setAttempt((a) => a + 1);
             }}
           >
-            Try again
+            {t("Try again")}
           </button>
         )}
       </main>
@@ -98,6 +104,7 @@ export default function Home() {
 }
 
 function Game({ data }: { data: IndicesData }) {
+  const { t, language } = useLanguage();
   const [state, setState] = useState<GameState>(() =>
     createGame("explore", data),
   );
@@ -162,6 +169,7 @@ function Game({ data }: { data: IndicesData }) {
     window.render_game_to_text = () =>
       JSON.stringify({
         ...stateRef.current,
+        message: translateRuntimeText(language, stateRef.current.message),
         previous: undefined,
         coordinateSystem:
           "DOM tiles; board above tray; tile IDs identify controls.",
@@ -174,7 +182,7 @@ function Game({ data }: { data: IndicesData }) {
       delete window.render_game_to_text;
       delete window.advanceTime;
     };
-  }, [data]);
+  }, [data, language]);
   useEffect(() => {
     if (state.mode === "challenge" && state.score > best) {
       setBest(state.score);
@@ -224,20 +232,20 @@ function Game({ data }: { data: IndicesData }) {
     data,
     selected.map((t) => t.char),
   );
-  function renderTile(t: Tile, area: "board" | "tray") {
-    const checked = state.selected.includes(t.id);
-    const hinted = state.hinted.includes(t.id);
-    const unfolds = !!decompose(data, t.char);
+  function renderTile(tile: Tile, area: "board" | "tray") {
+    const checked = state.selected.includes(tile.id);
+    const hinted = state.hinted.includes(tile.id);
+    const unfolds = !!decompose(data, tile.char);
     const faceSplits = area === "board" || unfolds;
     return (
       <div
-        key={t.id}
+        key={tile.id}
         className={`tile-wrap ${area === "board" ? "board-wrap" : ""}`}
-        data-tile-id={t.id}
-        data-char={t.char}
-        data-drag-id={area === "tray" ? t.id : undefined}
+        data-tile-id={tile.id}
+        data-char={tile.char}
+        data-drag-id={area === "tray" ? tile.id : undefined}
         onPointerDown={
-          area === "tray" ? (e) => drag.pointerDown(e, t.id) : undefined
+          area === "tray" ? (e) => drag.pointerDown(e, tile.id) : undefined
         }
         onClickCapture={(e) => {
           if (drag.suppressClick()) {
@@ -249,29 +257,29 @@ function Game({ data }: { data: IndicesData }) {
       >
         <button
           className={`tile ${area === "board" ? "board-tile" : ""} ${checked ? "selected" : ""} ${hinted ? "hinted" : ""}`}
-          data-select-id={!faceSplits ? t.id : undefined}
+          data-select-id={!faceSplits ? tile.id : undefined}
           data-hinted={hinted || undefined}
-          aria-label={`${faceSplits ? "Split" : "Select"} ${t.char}${hinted ? ", can combine with another tile" : ""}`}
+          aria-label={`${faceSplits ? t("Split") : t("Select")} ${tile.char}${hinted ? `, ${t("can combine with another tile")}` : ""}`}
           aria-pressed={!faceSplits ? checked : undefined}
           disabled={!active}
           onClick={() =>
-            send({ type: faceSplits ? "split" : "select", id: t.id })
+            send({ type: faceSplits ? "split" : "select", id: tile.id })
           }
-          onMouseEnter={() => setGuide(t.char)}
+          onMouseEnter={() => setGuide(tile.char)}
           onMouseLeave={() => setGuide(null)}
-          onFocus={() => setGuide(t.char)}
+          onFocus={() => setGuide(tile.char)}
           onBlur={() => setGuide(null)}
         >
-          <Glyph>{t.char}</Glyph>
+          <Glyph>{tile.char}</Glyph>
           <span className={`tile-pinyin ${pinyin ? "" : "hidden-pinyin"}`}>
-            {data.meta[t.char]?.pinyin[0] || "—"}
+            {data.meta[tile.char]?.pinyin[0] || "—"}
           </span>
-          {unfolds && <span className="unfold-label">Unfold ↗</span>}
+          {unfolds && <span className="unfold-label">{t("Unfold")} ↗</span>}
         </button>
         {area === "tray" && (
           <span
             className="drag-grip"
-            title="Drag onto another tile to combine"
+            title={t("Drag onto another tile to combine")}
             aria-hidden="true"
           >
             ⠿
@@ -280,12 +288,14 @@ function Game({ data }: { data: IndicesData }) {
         {area === "tray" && unfolds && (
           <button
             className={`tile-selector ${checked ? "checked" : ""}`}
-            data-select-id={t.id}
-            aria-label={`Select ${t.char}`}
+            data-select-id={tile.id}
+            aria-label={`${t("Select")} ${tile.char}`}
             aria-pressed={checked}
-            title={`Select ${t.char} to combine without unfolding`}
+            title={t("Select {char} to combine without unfolding", {
+              char: tile.char,
+            })}
             disabled={!active}
-            onClick={() => send({ type: "select", id: t.id })}
+            onClick={() => send({ type: "select", id: tile.id })}
           >
             {checked ? "✓" : "+"}
           </button>
@@ -298,12 +308,12 @@ function Game({ data }: { data: IndicesData }) {
     <div className={`app-shell ${isChallenge ? "challenge-mode" : ""}`}>
       <header className="site-header">
         <Brand />
-        <nav aria-label="Main">
+        <nav aria-label={t("Main navigation")}>
           <Link href="/playground">
-            Playground <span aria-hidden="true">↗</span>
+            {t("Playground")} <span aria-hidden="true">↗</span>
           </Link>
           <Link href="/inspector">
-            Dictionary lab <span aria-hidden="true">↗</span>
+            {t("Dictionary lab")} <span aria-hidden="true">↗</span>
           </Link>
           <button
             className="text-button"
@@ -312,27 +322,30 @@ function Game({ data }: { data: IndicesData }) {
               setHelp(true);
             }}
           >
-            How to play <span className="help-circle">?</span>
+            {t("How to play")} <span className="help-circle">?</span>
           </button>
+          <LanguagePicker />
         </nav>
       </header>
       <main>
         <section className="intro">
           <div>
             <p className="eyebrow">
-              TAKE APART. PUT TOGETHER. SEE SOMETHING NEW.
+              {t("TAKE APART. PUT TOGETHER. SEE SOMETHING NEW.")}
             </p>
             <h1>
-              A world inside every character<span>.</span>
+              {t("A world inside every character")}
+              <span>.</span>
             </h1>
             <p className="intro-copy">
-              A tree. An eye. A heart. A thought. Discover how Chinese
-              characters connect.
+              {t(
+                "A tree. An eye. A heart. A thought. Discover how Chinese characters connect.",
+              )}
             </p>
           </div>
           <div
             className="intro-formula"
-            aria-label="Tree plus eye plus heart becomes thought"
+            aria-label={t("Tree plus eye plus heart becomes thought")}
           >
             <Glyph>木</Glyph>
             <i>+</i>
@@ -344,14 +357,14 @@ function Game({ data }: { data: IndicesData }) {
           </div>
         </section>
         <div className="mode-bar">
-          <div className="mode-switch" aria-label="Game mode">
+          <div className="mode-switch" aria-label={t("Game mode")}>
             <button
               aria-pressed={!isChallenge}
               onClick={() => {
                 if (isChallenge) reset("explore");
               }}
             >
-              <span>◌</span> Explore
+              <span>◌</span> {t("Explore")}
             </button>
             <button
               aria-pressed={isChallenge}
@@ -359,13 +372,13 @@ function Game({ data }: { data: IndicesData }) {
                 if (!isChallenge) reset("challenge");
               }}
             >
-              <span>◷</span> Timed challenge
+              <span>◷</span> {t("Timed challenge")}
             </button>
           </div>
           <span className="mode-caption">
             {isChallenge
-              ? "A little pressure. A lot of possibility."
-              : "No clock. Just curiosity."}
+              ? t("A little pressure. A lot of possibility.")
+              : t("No clock. Just curiosity.")}
           </span>
           <label className="pinyin-toggle">
             <input
@@ -373,36 +386,44 @@ function Game({ data }: { data: IndicesData }) {
               checked={pinyin}
               onChange={(e) => setPinyin(e.target.checked)}
             />
-            <span className="switch-track" /> Pinyin
+            <span className="switch-track" /> {t("Pinyin")}
           </label>
         </div>
         <div className="game-layout">
           <div className="play-column">
             {isChallenge && state.phase !== "playing" && (
-              <section className="run-card" aria-label="Run controls">
+              <section className="run-card" aria-label={t("Run controls")}>
                 <div>
                   <p className="eyebrow">
                     {state.phase === "ready"
-                      ? "READY WHEN YOU ARE"
+                      ? t("READY WHEN YOU ARE")
                       : state.phase === "paused"
-                        ? "TAKE A BREATH"
-                        : "A LITTLE MORE DISCOVERED"}
+                        ? t("TAKE A BREATH")
+                        : t("A LITTLE MORE DISCOVERED")}
                   </p>
                   <h2>
                     {state.phase === "ready"
-                      ? "60 seconds. How much will you discover?"
+                      ? t("60 seconds. How much will you discover?")
                       : state.phase === "paused"
-                        ? "Your table is waiting."
+                        ? t("Your table is waiting.")
                         : state.reason === "overflow"
-                          ? "A full tray. A fresh start?"
-                          : "Time’s up. Nicely explored."}
+                          ? t("A full tray. A fresh start?")
+                          : t("Time’s up. Nicely explored.")}
                   </h2>
                   <p>
                     {state.phase === "ready"
-                      ? "8 starting tiles. A new one every 6 seconds. Make space before the 13th arrives."
+                      ? t(
+                          "8 starting tiles. A new one every 6 seconds. Make space before the 13th arrives.",
+                        )
                       : state.phase === "paused"
-                        ? "The clock and incoming tiles are paused."
-                        : `${state.score} points · ${state.discovered.length} unique discoveries this run.`}
+                        ? t("The clock and incoming tiles are paused.")
+                        : t(
+                            "{score} points · {count} unique discoveries this run.",
+                            {
+                              score: state.score,
+                              count: state.discovered.length,
+                            },
+                          )}
                   </p>
                 </div>
                 <button
@@ -417,31 +438,31 @@ function Game({ data }: { data: IndicesData }) {
                   }
                 >
                   {state.phase === "ready"
-                    ? "Start challenge →"
+                    ? t("Start challenge →")
                     : state.phase === "paused"
-                      ? "Keep playing →"
-                      : "New run →"}
+                      ? t("Keep playing →")
+                      : t("New run →")}
                 </button>
               </section>
             )}
             {isChallenge && (
               <section
                 className="challenge-strip"
-                aria-label="Challenge status"
+                aria-label={t("Challenge status")}
               >
                 <div>
-                  <span className="eyebrow">TIME LEFT</span>
+                  <span className="eyebrow">{t("TIME LEFT")}</span>
                   <strong className={state.remaining <= 10000 ? "danger" : ""}>
                     {Math.ceil(state.remaining / 1000)}
-                    <small>s</small>
+                    <small>{t("seconds abbreviation")}</small>
                   </strong>
                 </div>
                 <div>
-                  <span className="eyebrow">SCORE</span>
+                  <span className="eyebrow">{t("SCORE")}</span>
                   <strong>{state.score.toString().padStart(2, "0")}</strong>
                 </div>
                 <div>
-                  <span className="eyebrow">SESSION BEST</span>
+                  <span className="eyebrow">{t("SESSION BEST")}</span>
                   <strong>{best.toString().padStart(2, "0")}</strong>
                 </div>
                 <button
@@ -453,20 +474,22 @@ function Game({ data }: { data: IndicesData }) {
                   }
                   disabled={state.phase === "ready" || state.phase === "over"}
                 >
-                  {state.phase === "paused" ? "Resume" : "Pause"}
+                  {state.phase === "paused" ? t("Resume") : t("Pause")}
                 </button>
               </section>
             )}
-            <section className="board-panel" aria-label="Character board">
+            <section className="board-panel" aria-label={t("Character board")}>
               <div className="panel-heading">
                 <div>
                   <span className="section-number">01</span>
-                  <h2>Your character board</h2>
+                  <h2>{t("Your character board")}</h2>
                 </div>
-                <span>{state.board.length} characters</span>
+                <span>
+                  {t("{count} characters", { count: state.board.length })}
+                </span>
               </div>
               <p className="panel-description">
-                Click a character to unfold it into its parts.
+                {t("Click a character to unfold it into its parts.")}
               </p>
               <div className="board-tiles">
                 {state.board.map((t) => renderTile(t, "board"))}
@@ -474,10 +497,10 @@ function Game({ data }: { data: IndicesData }) {
                   <div className="empty-board">
                     <span>合</span>
                     <p>
-                      Your next discovery belongs here.
+                      {t("Your next discovery belongs here.")}
                       <br />
                       <small>
-                        Combine two or three tiles from the tray below.
+                        {t("Combine two or three tiles from the tray below.")}
                       </small>
                     </p>
                   </div>
@@ -487,8 +510,12 @@ function Game({ data }: { data: IndicesData }) {
                 <span>
                   <span className="small-spark">✳</span>{" "}
                   {isChallenge
-                    ? "Made characters stay here. Split them to reuse their parts."
-                    : "Unfold one tile at a time. Use + to select a tray tile intact."}
+                    ? t(
+                        "Made characters stay here. Split them to reuse their parts.",
+                      )
+                    : t(
+                        "Unfold one tile at a time. Use + to select a tray tile intact.",
+                      )}
                 </span>
                 {!isChallenge && (
                   <button
@@ -496,29 +523,30 @@ function Game({ data }: { data: IndicesData }) {
                     disabled={!state.previous}
                     onClick={() => send({ type: "undo" })}
                   >
-                    ↶ Undo
+                    ↶ {t("Undo")}
                   </button>
                 )}
               </div>
             </section>
-            <section className="tray-panel" aria-label="Component tray">
+            <section className="tray-panel" aria-label={t("Component tray")}>
               <div className="panel-heading">
                 <div>
                   <span className="section-number">02</span>
-                  <h2>Your component tray</h2>
+                  <h2>{t("Your component tray")}</h2>
                 </div>
                 <span
                   className={
                     isChallenge && state.tray.length >= 10 ? "danger" : ""
                   }
                 >
-                  {state.tray.length}
-                  {isChallenge ? ` / ${CAPACITY}` : ""} tiles
+                  {t("{count} tiles", { count: state.tray.length })}
+                  {isChallenge ? ` / ${CAPACITY}` : ""}
                 </span>
               </div>
               <p className="panel-description">
-                Drag a tile onto another to combine. On touch screens, use the
-                dotted grip. Click to unfold; use + to select.
+                {t(
+                  "Drag a tile onto another to combine. On touch screens, use the dotted grip. Click to unfold; use + to select.",
+                )}
               </p>
               <div className="tray-tiles">
                 {state.tray.map((t) => renderTile(t, "tray"))}
@@ -547,13 +575,17 @@ function Game({ data }: { data: IndicesData }) {
                       style={{ width: `${(1 - state.dripIn / 6000) * 100}%` }}
                     />
                   </div>
-                  <span>Next tile in {Math.ceil(state.dripIn / 1000)}s</span>
+                  <span>
+                    {t("Next tile in {seconds}s", {
+                      seconds: Math.ceil(state.dripIn / 1000),
+                    })}
+                  </span>
                 </div>
               )}
               <div className="composition-bar">
                 <div
                   className="selection-preview"
-                  aria-label="Selected components"
+                  aria-label={t("Selected components")}
                 >
                   <span>
                     <Glyph>{selected[0]?.char ?? "·"}</Glyph>
@@ -572,8 +604,8 @@ function Game({ data }: { data: IndicesData }) {
                   )}
                   <span className="selection-note">
                     {selected.length >= 2
-                      ? "A new possibility?"
-                      : "Pick two pieces"}
+                      ? t("A new possibility?")
+                      : t("Pick two pieces")}
                   </span>
                 </div>
                 <div className="compose-actions">
@@ -583,12 +615,14 @@ function Game({ data }: { data: IndicesData }) {
                     aria-pressed={state.hinted.length > 0}
                     title={
                       state.hinted.length
-                        ? "Hide combination hints"
-                        : "Highlight all tiles with a valid combination partner"
+                        ? t("Hide combination hints")
+                        : t(
+                            "Highlight all tiles with a valid combination partner",
+                          )
                     }
                     onClick={() => send({ type: "hint" })}
                   >
-                    ✧ Hint
+                    ✧ {t("Hint")}
                   </button>
                   <button
                     ref={combineButton}
@@ -596,7 +630,7 @@ function Game({ data }: { data: IndicesData }) {
                     disabled={!active || selected.length < 2}
                     onClick={() => send({ type: "compose" })}
                   >
-                    Combine <span aria-hidden="true">↗</span>
+                    {t("Combine")} <span aria-hidden="true">↗</span>
                   </button>
                 </div>
               </div>
@@ -609,14 +643,14 @@ function Game({ data }: { data: IndicesData }) {
               <span aria-hidden="true">
                 {state.message.startsWith("No match") ? "↔" : "✳"}
               </span>
-              <p>{state.message}</p>
+              <p>{translateRuntimeText(language, state.message)}</p>
             </div>
             {!isChallenge && (
               <div className="explore-controls">
                 <label>
-                  Tile set{" "}
+                  {t("Tile set")}{" "}
                   <select
-                    aria-label="Tile set"
+                    aria-label={t("Tile set")}
                     value={sample}
                     onChange={(e) => {
                       const n = Number(e.target.value);
@@ -626,13 +660,13 @@ function Game({ data }: { data: IndicesData }) {
                   >
                     {SAMPLE_SETS.map((s, i) => (
                       <option value={i} key={s.name}>
-                        {s.name}
+                        {t(s.name)}
                       </option>
                     ))}
                   </select>
                 </label>
                 <button className="text-button" onClick={() => reset()}>
-                  ↻ Reset table
+                  ↻ {t("Reset table")}
                 </button>
                 <form
                   onSubmit={(e) => {
@@ -642,16 +676,16 @@ function Game({ data }: { data: IndicesData }) {
                   }}
                 >
                   <label className="sr-only" htmlFor="add-character">
-                    Add a character
+                    {t("Add a character")}
                   </label>
                   <input
                     id="add-character"
-                    placeholder="Try a character: 好"
+                    placeholder={t("Try a character: 好")}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     maxLength={8}
                   />
-                  <button type="submit" aria-label="Add character">
+                  <button type="submit" aria-label={t("Add character")}>
                     +
                   </button>
                 </form>
@@ -659,37 +693,41 @@ function Game({ data }: { data: IndicesData }) {
             )}
             {isChallenge && state.phase === "playing" && (
               <div className="run-note">
-                +3 seconds per composition · +1 point, plus +1 for a new
-                discovery
+                {t(
+                  "+3 seconds per composition · +1 point, plus +1 for a new discovery",
+                )}
               </div>
             )}
           </div>
-          <aside className="field-guide" aria-label="Character field guide">
+          <aside
+            className="field-guide"
+            aria-label={t("Character field guide")}
+          >
             <div className="guide-heading">
-              <span className="eyebrow">THE FIELD GUIDE</span>
+              <span className="eyebrow">{t("THE FIELD GUIDE")}</span>
               <span>↗</span>
             </div>
             <div className="guide-character">
               <Glyph>{focused}</Glyph>
               <span>
-                {meta?.pinyin.join(" · ") || "Pronunciation unavailable"}
+                {meta?.pinyin.join(" · ") || t("Pronunciation unavailable")}
               </span>
             </div>
             <div className="guide-definition">
               <h2>
-                {meta?.definition.split(";")[0] || "A character to explore"}
+                {meta?.definition.split(";")[0] || t("A character to explore")}
               </h2>
               <p>
                 {meta?.definition.includes(";")
                   ? meta.definition
                       .slice(meta.definition.indexOf(";") + 1)
                       .trim()
-                  : "Every piece is a place to begin."}
+                  : t("Every piece is a place to begin.")}
               </p>
             </div>
             <div className="guide-divider" />
             <p className="eyebrow">
-              {children ? "LOOK INSIDE" : "A SINGLE PIECE"}
+              {children ? t("LOOK INSIDE") : t("A SINGLE PIECE")}
             </p>
             {children ? (
               <>
@@ -699,7 +737,7 @@ function Game({ data }: { data: IndicesData }) {
                       {i > 0 && <i>+</i>}
                       <button
                         onClick={() => setGuide(c)}
-                        aria-label={`Learn about ${c}`}
+                        aria-label={t("Learn about {char}", { char: c })}
                       >
                         <Glyph>{c}</Glyph>
                       </button>
@@ -717,25 +755,26 @@ function Game({ data }: { data: IndicesData }) {
               </>
             ) : (
               <p className="guide-note">
-                No supported split in our dictionary. This tile may still be a
-                part of another character.
+                {t(
+                  "No supported split in our dictionary. This tile may still be a part of another character.",
+                )}
               </p>
             )}
             <div className="field-note">
-              <span>GOOD TO KNOW</span>
+              <span>{t("GOOD TO KNOW")}</span>
               <p>
-                Parts sometimes change shape inside a character.{" "}
-                <Glyph>心</Glyph> can appear as <Glyph>忄</Glyph> — we keep the
-                full character on your tile.
+                {t("Parts sometimes change shape inside a character. ")}
+                <Glyph>心</Glyph> {t("can appear as")} <Glyph>忄</Glyph>
+                {t(" — we keep the full character on your tile.")}
               </p>
             </div>
           </aside>
         </div>
         <section className="discoveries">
           <div>
-            <span className="eyebrow">YOUR SMALL COLLECTION</span>
+            <span className="eyebrow">{t("YOUR SMALL COLLECTION")}</span>
             <h2>
-              Made by you{" "}
+              {t("Made by you")}{" "}
               <span>{state.discovered.length.toString().padStart(2, "0")}</span>
             </h2>
           </div>
@@ -753,9 +792,9 @@ function Game({ data }: { data: IndicesData }) {
               ))
             ) : (
               <p>
-                Every character you create becomes a little discovery.
+                {t("Every character you create becomes a little discovery.")}
                 <br />
-                <span>Your first one is just two tiles away.</span>
+                <span>{t("Your first one is just two tiles away.")}</span>
               </p>
             )}
           </div>
@@ -763,10 +802,10 @@ function Game({ data }: { data: IndicesData }) {
       </main>
       <footer>
         <span>
-          <Glyph>想</Glyph> A little play. A different way to see.
+          <Glyph>想</Glyph> {t("A little play. A different way to see.")}
         </span>
         <span>
-          Character data by{" "}
+          {t("Character data by ")}{" "}
           <a
             href="https://github.com/skishore/makemeahanzi"
             target="_blank"
@@ -786,19 +825,21 @@ function Game({ data }: { data: IndicesData }) {
         className="game-dialog"
       >
         <div className="dialog-heading">
-          <p className="eyebrow">MORE THAN ONE POSSIBILITY</p>
+          <p className="eyebrow">{t("MORE THAN ONE POSSIBILITY")}</p>
           <button
             className="icon-button"
-            aria-label="Cancel composition"
+            aria-label={t("Cancel composition")}
             onClick={() => send({ type: "cancel" })}
           >
             ×
           </button>
         </div>
-        <h2 id="choose-title">Which character will you make?</h2>
+        <h2 id="choose-title">{t("Which character will you make?")}</h2>
         <p>
-          <Glyph>{selected.map((t) => t.char).join(" + ")}</Glyph> can become{" "}
-          {matches.length} different characters. Choose one.
+          <Glyph>{selected.map((tile) => tile.char).join(" + ")}</Glyph>
+          {t(" can become ")}
+          {matches.length}
+          {t(" different characters. Choose one.")}
         </p>
         <div className="candidate-grid">
           {state.candidates.map((c) => (
@@ -806,13 +847,13 @@ function Game({ data }: { data: IndicesData }) {
               <Glyph>{c}</Glyph>
               <span>{data.meta[c]?.pinyin[0]}</span>
               <small>
-                {data.meta[c]?.definition || "Definition unavailable"}
+                {data.meta[c]?.definition || t("Definition unavailable")}
               </small>
             </button>
           ))}
         </div>
         <button className="secondary" onClick={() => send({ type: "cancel" })}>
-          Keep my tiles
+          {t("Keep my tiles")}
         </button>
       </dialog>
       <dialog
@@ -825,50 +866,48 @@ function Game({ data }: { data: IndicesData }) {
         }}
       >
         <div className="dialog-heading">
-          <p className="eyebrow">WELCOME TO XIANG</p>
+          <p className="eyebrow">{t("WELCOME TO XIANG")}</p>
           <button
             className="icon-button"
-            aria-label="Close instructions"
+            aria-label={t("Close instructions")}
             onClick={() => setHelp(false)}
           >
             ×
           </button>
         </div>
-        <h2 id="help-title">Characters are made of possibilities.</h2>
+        <h2 id="help-title">{t("Characters are made of possibilities.")}</h2>
         <ol>
           <li>
-            <strong>Take one apart.</strong> Click a character on the board. Its
-            parts move to your tray. Try 想 → 相 + 心, then click 相 in the tray
-            to get 木 + 目.
+            <strong>{t("Take one apart.")}</strong>{" "}
+            {t(
+              "Click a character on the board. Its parts move to your tray. Try 想 → 相 + 心, then click 相 in the tray to get 木 + 目.",
+            )}
           </li>
           <li>
-            <strong>Make something new.</strong> Select two or three tray tiles
-            (use + to keep a tile intact), then Combine. If there’s more than
-            one result, you choose. You can also drag one tile onto another;
-            drag a selected pair onto a third tile for three-piece recipes. On
-            touch screens, drag the dotted grip. Press Escape to cancel. Invalid
-            combinations keep your tiles.
+            <strong>{t("Make something new.")}</strong>{" "}
+            {t(
+              "Combine two or three tray tiles (use + to keep a tile intact), then Combine. If there’s more than one result, you choose. You can also drag one tile onto another; drag a selected pair onto a third tile for three-piece recipes. On touch screens, drag the dotted grip. Press Escape to cancel. Invalid combinations keep your tiles.",
+            )}
           </li>
           <li>
-            <strong>Follow your curiosity.</strong> A character you make stays
-            on the board. Split it again, learn its meaning, or try a different
-            pairing.
+            <strong>{t("Follow your curiosity.")}</strong>{" "}
+            {t(
+              "A character you make stays on the board. Split it again, learn its meaning, or try a different pairing.",
+            )}
           </li>
         </ol>
         <p>
-          Explore freely, or try the timed challenge: 60 seconds, a new tile
-          every 6 seconds, and a 12-tile tray. Each composition adds 3 seconds
-          and 1 point, plus 1 point for a new character. A 13th tile ends the
-          run—even when splitting a board character.
+          {t(
+            "Explore freely, or try the timed challenge: 60 seconds, a new tile every 6 seconds, and a 12-tile tray. Each composition adds 3 seconds and 1 point, plus 1 point for a new character. A 13th tile ends the run—even when splitting a board character.",
+          )}
         </p>
         <p className="guide-note">
-          These are structural dictionary relationships, not always the
-          historical origins of a character. Tile order doesn’t matter. Only
-          complete, supported recipes are used, including reviewed three-piece
-          splits such as 森 → 木 + 木 + 木.
+          {t(
+            "These are structural dictionary relationships, not always the historical origins of a character. Tile order doesn’t matter. Only complete, supported recipes are used, including reviewed three-piece splits such as 森 → 木 + 木 + 木.",
+          )}
         </p>
         <button className="primary" onClick={() => setHelp(false)}>
-          Let’s explore →
+          {t("Let’s explore →")}
         </button>
       </dialog>
     </div>

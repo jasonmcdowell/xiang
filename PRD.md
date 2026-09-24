@@ -201,6 +201,7 @@ Layout:
 - Field guide with pronunciation, meaning, and one-level decomposition.
 - Discovery collection; Explore set/reset/undo/add controls; challenge start/pause/resume/new-run controls and time/score/best/arrival indicators.
 - Loading state, recoverable fetch failure, invalid-move feedback, and responsive mobile layout.
+- A site-wide language selector for English, Traditional Chinese, and Simplified Chinese; retain the interface preference across routes and reloads.
 
 Interactions:
 - Click a decomposable tile face → its children move to the tray or replace it in place within the tray. A separate + control on decomposable tray tiles selects them intact.

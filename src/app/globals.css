@@ -136,6 +136,24 @@ footer a:hover {
 .text-button:not(:disabled):hover {
   color: var(--orange);
 }
+.language-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.language-picker select {
+  min-height: 32px;
+  max-width: 142px;
+  padding: 5px 24px 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fdfcf8;
+  color: var(--ink);
+  font-size: 11px;
+}
 .help-circle {
   margin-left: 8px;
   display: inline-grid;
@@ -985,7 +1003,10 @@ footer a {
   text-align: center;
 }
 .loading-page .brand {
-  margin-bottom: 60px;
+  margin-bottom: 24px;
+}
+.loading-page > .language-picker {
+  margin-bottom: 28px;
 }
 .loading-glyph {
   font-size: 80px;
@@ -1174,8 +1195,16 @@ footer a {
   .app-shell {
     padding: 0 16px;
   }
+  .site-header {
+    height: auto;
+    min-height: 79px;
+    gap: 10px;
+  }
   .site-header nav {
-    gap: 17px;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(100% - 118px);
   }
   .site-header nav > a {
     font-size: 10px;
@@ -1193,6 +1222,19 @@ footer a {
     display: none;
   }
   .site-header nav .text-button {
+    font-size: 10px;
+  }
+  .language-picker > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .language-picker select {
+    max-width: 126px;
+    min-height: 28px;
     font-size: 10px;
   }
   h1 {

@@ -29,7 +29,7 @@ Generated assets are committed. **You do not need the raw dictionary to run or b
 
 **Timed challenge** starts with 8 components from four curated recipes, shuffled. Press **Start challenge** for 60 seconds of play. A tile arrives every 6 seconds. Combining consumes two or three tray tiles and puts one character on the board, adding 3 seconds and 1 point, plus 1 point for a character first created that run. Recomposition receives the base reward again. The 13th tray tile ends the run; splitting a board character can also cause overflow. Time reaching zero ends the run.
 
-Pause freezes both clocks; hiding the tab pauses automatically. A composition chooser leaves the clock running. Best score is kept only for the current page visit; reloading resets it. Xiang does not use cookies, browser storage, analytics, or advertising scripts. See the [privacy page](https://jasonmcdowell.github.io/xiang/privacy/) for the hosting notice.
+Pause freezes both clocks; hiding the tab pauses automatically. A composition chooser leaves the clock running. Best score is kept only for the current page visit; reloading resets it. Use the site-wide language selector for English, Traditional Chinese, or Simplified Chinese; that preference is saved in browser local storage and applied across routes and reloads. Game state remains session-only. Xiang does not use cookies, analytics, or advertising scripts. See the [privacy page](https://jasonmcdowell.github.io/xiang/privacy/) for details.
 
 These are structural dictionary relationships, not necessarily etymological explanations. Unreviewed nested expressions are excluded rather than guessed. No per-move network requests occur after the four indices load.
 
@@ -50,6 +50,7 @@ npm run test:browser
 npm run test:motion     # Flight paths, cancellation, reduced motion, tray unfolding and triples
 npm run test:recipes    # Mixed three-piece recipes, all eight round trips, mobile and inspector
 npm run test:playground # Tear, nested tear, magnetic alignment, two physics modes and multitouch
+npm run test:language  # English/Traditional/Simplified UI, dynamic messages, persistence and routes
 ```
 
 To test another origin:
@@ -61,7 +62,7 @@ npm run test:recipes    # Mixed three-piece recipes, all eight round trips, mobi
 npm run test:playground # Tear, nested tear, magnetic alignment, two physics modes and multitouch
 ```
 
-Browser checks cover splitting/recomposition, invalid pairs, duplicate tile IDs, chooser/cancel, keyboard controls, undo, sample sets, pinyin, hints, timed rewards, pause, timeout, overflow, restart, session best score, inspector, mobile overflow, loading failure/retry, and the absence of per-move data requests. Screenshots go to `output/browser/` (gitignored).
+Browser checks cover splitting/recomposition, invalid pairs, duplicate tile IDs, chooser/cancel, keyboard controls, undo, sample sets, pinyin, hints, timed rewards, pause, timeout, overflow, restart, session best score, inspector, mobile overflow, loading failure/retry, and the absence of per-move data requests. The language suite verifies all three interface options, localized game messages, browser `lang` and title updates, and preference persistence across reloads and routes. Screenshots go to `output/browser/` and `output/language/` (gitignored).
 
 `window.render_game_to_text()` exposes the visible game state for automation. `window.advanceTime(ms)` switches the current mounted game to a manually stepped clock for deterministic tests; reload to restore real time. It has no scoring or state-injection shortcut.
 
@@ -105,6 +106,7 @@ Dictionary source and license notices are served at `public/data/NOTICE.txt` and
 - `src/app/inspector/page.tsx` — dictionary lab.
 - `src/app/playground/` and `src/lib/playgroundWorld.ts` — the separate physical character lab.
 - `src/app/globals.css` — responsive tabletop styling and reduced-motion support.
+- `src/lib/language.ts` and `src/components/LanguageProvider.tsx` — the three site UI catalogs and shared saved language preference.
 - `tests/` and `scripts/test-browser.mjs` — automated verification.
 - `PRD.md`, `DECISIONS.md`, and `TASKS.md` — product, rationale, and acceptance status.
 
