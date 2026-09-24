@@ -72,14 +72,27 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
+  background: #ded7c7;
+}
+
+.stage :global(.playground-board-art) {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .stage canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   touch-action: none;
   cursor: grab;
+  z-index: 1;
 }
 
 .stage canvas:focus-visible {
@@ -101,6 +114,11 @@
   pointer-events: none;
   color: var(--muted);
   font-size: 11px;
+  padding: 6px 9px;
+  border: 1px solid rgb(78 71 60 / 10%);
+  border-radius: 4px;
+  background: rgb(250 248 239 / 82%);
+  z-index: 2;
 }
 
 .characterNote {
@@ -114,6 +132,33 @@
 
 .stageNote {
   right: 22px;
+}
+
+.boardMaterialPicker {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 9px 0 0;
+}
+
+.boardMaterialPicker label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.65px;
+}
+
+.boardMaterialPicker select {
+  width: min(100%, 270px);
+  min-width: 0;
+  height: 36px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  background: rgb(255 255 255 / 74%);
+  font-size: 11px;
 }
 
 .liveMessage {
@@ -134,6 +179,7 @@
   gap: 16px;
   color: var(--muted);
   background: var(--background);
+  z-index: 4;
 }
 
 .loading button {
@@ -634,6 +680,19 @@
   .characterNote {
     bottom: 14px;
     left: 15px;
+  }
+
+  .stageNote {
+    right: 15px;
+    bottom: 14px;
+  }
+
+  .boardMaterialPicker {
+    justify-content: space-between;
+  }
+
+  .boardMaterialPicker select {
+    width: min(70%, 270px);
   }
 
   .sidebar {

@@ -282,23 +282,7 @@ export function drawLayers(
   const body = layers[0]?.surfaceBody ?? layers[0]?.body;
   if (!body) return;
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  ctx.fillStyle = style === "flat" ? "#f7f6f0" : "#eeeae0";
-  ctx.fillRect(0, 0, body.width, body.height);
-  if (style === "flat") {
-    ctx.fillStyle = "#dcded3";
-    for (let x = (body.width / 2) % 28; x < body.width; x += 28)
-      for (let y = (body.height / 2) % 28; y < body.height; y += 28) {
-        ctx.beginPath();
-        ctx.arc(x, y, 0.75, 0, Math.PI * 2);
-        ctx.fill();
-      }
-  } else {
-    const table = ctx.createLinearGradient(0, 0, 0, body.height);
-    table.addColorStop(0, "rgba(255,255,255,.32)");
-    table.addColorStop(1, "rgba(130,120,99,.06)");
-    ctx.fillStyle = table;
-    ctx.fillRect(0, 0, body.width, body.height);
-  }
+  ctx.clearRect(0, 0, body.width, body.height);
   const drawnSurfaces = new Set<WobbleBody>();
   for (const layer of layers) {
     const surface = layer.surfaceBody ?? layer.body;

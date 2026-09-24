@@ -147,3 +147,10 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Let players select any drawable dictionary character and clearly leave unsupported physical mappings untorn.
 - [x] Verify lazy requests, an arbitrary dictionary-character tear, dynamic composition, production export, and the full playground browser suite against dev and the `/xiang` static export.
 - [x] Commit and push the generated assets and UI changes; verify the GitHub Pages deployment.
+
+## Follow-up — Selectable Playground board materials
+
+- [x] Add bamboo, rough-edged slate, traditional 19×19 Go, compact 9×9 Go, and rice-paper scroll materials beneath the same interactive scene.
+- [x] Add an accessible selector below the canvas and translate every option into Traditional and Simplified Chinese.
+- [x] Preserve physics interaction and character surface styling independently from the board material.
+- [x] Document the new Playground options and Bamboo table initial selection.

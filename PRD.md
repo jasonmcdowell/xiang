@@ -51,6 +51,7 @@ This is both a learning tool and a puzzle game, inspired by Scrabble/Rummikub �
 - In Raised and Draped styles, a component becomes a new tile only after the seam is stretched and its planned 184 × 184 face clears its sibling and all existing faces by at least 12 CSS pixels; compatible pieces remain catchable by the gentle magnetic field after separation.
 - The phone-sized playground board stays tall enough to pull two tiles apart vertically without clipping either new face.
 - Keep this visual experiment 2D and client-side. It should not delay or change the core Explore and Timed Challenge experience.
+- A board-material selector below the playground canvas compares a bamboo tabletop, one rough-edged slate slab, a full 19×19 wooden Go board, a compact 9×9 Go board, and a rice-paper scroll. Board materials remain independent of the Flat/Raised/Draped character surface selector and physics.
 
 ---
 

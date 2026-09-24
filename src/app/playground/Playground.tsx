@@ -18,6 +18,7 @@ import {
 } from "@/lib/playgroundAssetsClient";
 import { drawConnections, drawLayers, drawMagnet } from "@/lib/wobbleDrawing";
 import { PlaygroundWorld, type PhysicsMode } from "@/lib/playgroundWorld";
+import PlaygroundBoard, { type BoardMaterial } from "./PlaygroundBoard";
 import type { VisualStyle } from "@/lib/wobbleDrawing";
 import styles from "./playground.module.css";
 
@@ -77,6 +78,7 @@ export default function Playground() {
   const [reduced, setReduced] = useState(false);
   const [mode, setMode] = useState<PhysicsMode>("fixed");
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("raised");
+  const [boardMaterial, setBoardMaterial] = useState<BoardMaterial>("bamboo");
   const [tileRepulsion, setTileRepulsion] = useState(true);
   const [focusedCharacter, setFocusedCharacter] = useState("想");
   const [dictionary, setDictionary] = useState<PlaygroundDictionary | null>(
@@ -725,6 +727,7 @@ export default function Playground() {
           </section>
 
           <div className={styles.stage} ref={stageRef}>
+            <PlaygroundBoard material={boardMaterial} />
             <canvas
               ref={canvasRef}
               tabIndex={0}
@@ -765,6 +768,22 @@ export default function Playground() {
             <span className={styles.stageNote} aria-hidden="true">
               {t("A little give. A little gravity.")}
             </span>
+          </div>
+          <div className={styles.boardMaterialPicker}>
+            <label htmlFor="playground-board-material">{t("Game board")}</label>
+            <select
+              id="playground-board-material"
+              value={boardMaterial}
+              onChange={(event) =>
+                setBoardMaterial(event.target.value as BoardMaterial)
+              }
+            >
+              <option value="bamboo">{t("Bamboo table")}</option>
+              <option value="slate">{t("Single slate slab")}</option>
+              <option value="go19">{t("Traditional Go board · 19×19")}</option>
+              <option value="go9">{t("Compact Go board · 9×9")}</option>
+              <option value="rice">{t("Rice-paper scroll")}</option>
+            </select>
           </div>
           <p className={styles.liveMessage} role="status" aria-live="polite">
             {translateRuntimeText(language, status.message)}

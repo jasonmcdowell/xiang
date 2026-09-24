@@ -390,3 +390,11 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** The character game should be usable by English and Chinese readers, and the choice should remain in effect across routes and visits without a language-selection server request.
 
 **Consequences:** The app now uses browser storage for this preference, while game state remains memory-only and no gameplay activity is persisted or sent. The privacy page states this distinction. The static Pages build needs no route or API changes; the language browser check covers both scripts, messages, route changes, and reload persistence.
+
+## D-051 — Offer selectable physical board materials in the Playground
+
+**Decision (2026-09-24):** Add a board-material selector directly below the Playground canvas, independent of the existing Flat/Raised/Draped character surface selector. Offer a bamboo table, one rough-edged slate slab, a traditional 19 × 19 Go board, a compact 9 × 9 Go board, and a rice-paper scroll surface with subtle fiber texture as the additional concept. Draw materials beneath the physics scene so board choice never changes tile placement, hit testing, or character physics. Start on Bamboo table.
+
+**Why:** Distinct table treatments let players compare the same physical character scene against different visual contexts. SVG backgrounds keep the slate silhouette and Go grids crisp at responsive sizes and remain a separate static layer beneath the existing physics canvas.
+
+**Consequences:** Board appearance is a local UI preference for the current Playground visit and is not coupled to game state or character tile material. The selector and its choices follow the site's English, Traditional Chinese, and Simplified Chinese interface setting.
