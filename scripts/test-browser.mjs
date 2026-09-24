@@ -7,6 +7,17 @@ fs.mkdirSync(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 await page.emulateMedia({ reducedMotion: "reduce" });
+const composeIndex = JSON.parse(
+  fs.readFileSync("public/data/compose_pairs.json", "utf8"),
+);
+const decompIndex = JSON.parse(
+  fs.readFileSync("public/data/decomp.json", "utf8"),
+);
+const tripleIndex = new Set(
+  Object.values(decompIndex)
+    .filter((children) => children.length === 3)
+    .map((children) => [...children].sort().join("|")),
+);
 const errors = [];
 const requests = [];
 page.on("pageerror", (e) => errors.push(e.message));
@@ -43,11 +54,59 @@ async function chooseIfNeeded() {
     await page.locator("dialog[open] .candidate-grid button").first().click();
   await settle();
 }
+function combinableTileIds(tray) {
+  const ids = new Set();
+  for (let i = 0; i < tray.length; i++) {
+    for (let j = i + 1; j < tray.length; j++) {
+      if (composeIndex[`${tray[i].char}|${tray[j].char}`]?.length) {
+        ids.add(tray[i].id);
+        ids.add(tray[j].id);
+      }
+      for (let k = j + 1; k < tray.length; k++) {
+        if (
+          tripleIndex.has(
+            [tray[i].char, tray[j].char, tray[k].char].sort().join("|"),
+          )
+        ) {
+          ids.add(tray[i].id);
+          ids.add(tray[j].id);
+          ids.add(tray[k].id);
+        }
+      }
+    }
+  }
+  return [...ids];
+}
+function findCombination(tray) {
+  for (let i = 0; i < tray.length; i++)
+    for (let j = i + 1; j < tray.length; j++)
+      if (composeIndex[`${tray[i].char}|${tray[j].char}`]?.length)
+        return [tray[i].id, tray[j].id];
+  for (let i = 0; i < tray.length; i++)
+    for (let j = i + 1; j < tray.length; j++)
+      for (let k = j + 1; k < tray.length; k++)
+        if (
+          tripleIndex.has(
+            [tray[i].char, tray[j].char, tray[k].char].sort().join("|"),
+          )
+        )
+          return [tray[i].id, tray[j].id, tray[k].id];
+  return [];
+}
 async function combineHint() {
   await click("✧ Hint");
-  assert.equal((await state()).selected.length, 2);
+  const game = await state();
+  const expected = combinableTileIds(game.tray).sort((a, b) => a - b);
+  assert.deepEqual([...game.hinted].sort((a, b) => a - b), expected);
+  assert.deepEqual(game.selected, []);
+  assert.equal(await page.locator(".tile.hinted").count(), expected.length);
+  const selection = findCombination(game.tray);
+  assert.ok(selection.length === 2 || selection.length === 3);
+  for (const id of selection)
+    await page.locator(`[data-select-id="${id}"]`).click();
   await page.getByRole("button", { name: /^Combine/ }).click();
   await chooseIfNeeded();
+  assert.deepEqual((await state()).hinted, []);
 }
 try {
   await page.goto(base);
@@ -56,8 +115,22 @@ try {
   );
   await advance(0);
   await shot("explore-desktop");
-  await click("Split 想");
   let s = await state();
+  await click("✧ Hint");
+  s = await state();
+  const expectedHints = combinableTileIds(s.tray).sort((a, b) => a - b);
+  assert.deepEqual([...s.hinted].sort((a, b) => a - b), expectedHints);
+  assert.deepEqual(s.selected, [], "hinting does not select a matching pair");
+  assert.equal(await page.locator(".tile.hinted").count(), expectedHints.length);
+  assert.equal(
+    await page.getByRole("button", { name: "✧ Hint", exact: true }).getAttribute("aria-pressed"),
+    "true",
+  );
+  await shot("hint-highlights");
+  await click("✧ Hint");
+  assert.deepEqual((await state()).hinted, [], "the hint button clears highlights");
+  await click("Split 想");
+  s = await state();
   assert.deepEqual(
     s.tray.slice(-2).map((t) => t.char),
     ["相", "心"],
@@ -198,9 +271,7 @@ try {
     ),
   );
   await click("Split 想");
-  await click("✧ Hint");
-  await page.getByRole("button", { name: /^Combine/ }).click();
-  await chooseIfNeeded();
+  await combineHint();
   await shot("mobile-discovery");
   await page.setViewportSize({ width: 320, height: 740 });
   assert.ok(

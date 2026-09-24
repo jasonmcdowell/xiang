@@ -8,6 +8,7 @@ export type GameState = {
   board: Tile[];
   tray: Tile[];
   selected: number[];
+  hinted: number[];
   candidates: string[];
   score: number;
   discovered: string[];
@@ -86,25 +87,31 @@ export function composeTiles(data: IndicesData, chars: string[]): string[] {
   }
   return index[chars.map(normalizeChar).sort().join("|")] ?? [];
 }
-export function findCombination(
+export function findCombinableTileIds(
   state: GameState,
   data: IndicesData,
-): Tile[] | null {
-  const pair = findPair(state, data);
-  if (pair) return pair;
-  for (let i = 0; i < state.tray.length; i++)
-    for (let j = i + 1; j < state.tray.length; j++)
-      for (let k = j + 1; k < state.tray.length; k++) {
-        const tiles = [state.tray[i], state.tray[j], state.tray[k]];
-        if (
-          composeTiles(
-            data,
-            tiles.map((t) => t.char),
-          ).length
-        )
-          return tiles;
+): number[] {
+  const combinable = new Set<number>();
+  const { tray } = state;
+  for (let i = 0; i < tray.length; i++) {
+    for (let j = i + 1; j < tray.length; j++) {
+      if (compose(data, tray[i].char, tray[j].char).length) {
+        combinable.add(tray[i].id);
+        combinable.add(tray[j].id);
       }
-  return null;
+      for (let k = j + 1; k < tray.length; k++) {
+        if (
+          composeTiles(data, [tray[i].char, tray[j].char, tray[k].char])
+            .length
+        ) {
+          combinable.add(tray[i].id);
+          combinable.add(tray[j].id);
+          combinable.add(tray[k].id);
+        }
+      }
+    }
+  }
+  return [...combinable].sort((a, b) => a - b);
 }
 function random(state: GameState): number {
   let x = state.seed || 1;
@@ -132,6 +139,7 @@ export function createGame(
     board: [],
     tray: [],
     selected: [],
+    hinted: [],
     candidates: [],
     score: 0,
     discovered: [],
@@ -188,6 +196,7 @@ function finish(s: GameState, reason: "time" | "overflow") {
   s.phase = "over";
   s.reason = reason;
   s.selected = [];
+  s.hinted = [];
   s.candidates = [];
   s.message =
     reason === "time"
@@ -211,6 +220,7 @@ function drip(s: GameState, data: IndicesData) {
     }
   }
   s.tray = [...s.tray, tile(s, char)];
+  s.hinted = [];
   if (s.tray.length > CAPACITY) finish(s, "overflow");
 }
 export function gameReducer(
@@ -283,13 +293,15 @@ export function gameReducer(
       ? { ...s.previous, message: "Last move undone.", previous: null }
       : state;
   if (action.type === "hint") {
-    const pair = findCombination(s, data);
+    if (s.hinted.length)
+      return { ...s, hinted: [], message: "Combination hints hidden." };
+    const hinted = findCombinableTileIds(s, data);
     return {
       ...s,
-      selected: pair ? pair.map((t) => t.id) : [],
+      hinted,
       candidates: [],
-      message: pair
-        ? `Try ${pair.map((t) => t.char).join(" + ")}. Select Combine to see what they make.`
+      message: hinted.length
+        ? `${hinted.length} tiles have at least one valid combination. Hints don’t show which pieces match.`
         : "No combination yet. Unfold a tile or wait for a new component.",
     };
   }
@@ -344,6 +356,7 @@ export function gameReducer(
             ...childTiles,
             ...s.tray.slice(trayIndex + 1),
           ];
+    s.hinted = [];
     s.selected = [];
     s.candidates = [];
     s.message = `${parent.char} → ${children.join(" + ")}. The pieces are in your tray.`;
@@ -406,6 +419,7 @@ export function gameReducer(
     remember(s, state);
     const fresh = !s.discovered.includes(char);
     s.tray = s.tray.filter((t) => !s.selected.includes(t.id));
+    s.hinted = [];
     s.board = [...s.board, tile(s, char)];
     s.selected = [];
     s.candidates = [];

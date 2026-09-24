@@ -23,7 +23,7 @@ Generated assets are committed. **You do not need the raw dictionary to run or b
 - Click any decomposable tile face to unfold it, whether on the board or in the tray. Tray tiles with an **Unfold** label also have a separate **+** selection button: use it to combine a character intact. Atomic tile faces select directly. Native buttons work with mouse, touch, Tab, Enter, and Space.
 - Select two or three distinct tiles, including two copies of the same character when available. Pair order does not matter.
 - If a pair makes several characters, a chooser shows every candidate, pronunciation, and definition. Escape or **Keep my tiles** cancels. Invalid pairs never consume tiles.
-- **Hint** selects a valid pair. **Undo** restores one Explore move, including the discovery collection.
+- **Hint** highlights every tray tile that participates in a valid pair or supported triple without revealing which tiles match each other. Highlights stay until the tray changes or you toggle hints off. **Undo** restores one Explore move, including the discovery collection.
 - Try five sample sets (including **Three of a kind** for 森, 品, and 晶) or add a single dictionary character. Explore limits the tray to 48 tiles and the board to 24 characters, with feedback when full.
 - Hover/focus a tile to inspect its meaning. The field guide also supports exploring immediate children. Pinyin can be hidden on tiles.
 
@@ -138,7 +138,7 @@ Next steps: playtest challenge pacing and component curation, expand normalizati
 3. Run `npm run build:data`. The generator checks the source IDS, complete leaf sequence, and validity of every child; a stale or incomplete entry fails generation.
 4. Check both directions in `/inspector` (use optional Component C), then run `npm test`, `npm run test:browser`, and `npm run test:motion`.
 
-The two-piece index remains unchanged. Three-piece composition is derived once from loaded decompositions and cached in the browser, so this adds no data requests. Hints prefer pairs, then try triples. Beyond these examples, add small reviewed batches; future work can resolve nested groups to known characters (e.g. 木 + 林) and offer alternate recipes without automatically over-fragmenting characters. Four-or-more-tile and alternate-recipe support needs an explicit rules/UI extension.
+The two-piece index remains unchanged. Three-piece composition is derived once from loaded decompositions and cached in the browser, so this adds no data requests. Hints highlight all tray tiles participating in a valid pair or triple without showing which tiles match each other. Beyond these examples, add small reviewed batches; future work can resolve nested groups to known characters (e.g. 木 + 林) and offer alternate recipes without automatically over-fragmenting characters. Four-or-more-tile and alternate-recipe support needs an explicit rules/UI extension.
 
 Visual copies travel between the source and destination of a transformation over roughly half a second. Real state changes immediately; animation never delays the clock or changes tile counts. Subsequent transformations, scrolling, resizing, reset, and reduced-motion preference changes cancel outstanding motion safely.
 

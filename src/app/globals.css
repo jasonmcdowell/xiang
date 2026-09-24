@@ -404,6 +404,21 @@ h2 {
 .tile.selected .tile-corner {
   color: #456448;
 }
+.tile.hinted:not(.selected) {
+  border-color: #b98a42;
+  background: linear-gradient(145deg, #fffdf5, #f5ead2);
+  box-shadow:
+    0 0 0 3px #ecd9b4,
+    0 3px 0 #c19c5d,
+    0 7px 13px #8c6c321f;
+}
+.tile.selected.hinted {
+  border-color: var(--orange);
+  box-shadow:
+    0 0 0 3px #ecd9b4,
+    0 0 0 4px var(--orange),
+    0 3px 0 #456448;
+}
 .board-footer {
   border-top: 1px solid #e7e8dd;
   padding: 12px 24px;

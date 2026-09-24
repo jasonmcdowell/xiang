@@ -7,7 +7,7 @@ import {
   findPair,
   compose,
   composeTiles,
-  findCombination,
+  findCombinableTileIds,
   type GameState,
   type Action,
 } from "../src/lib/game";
@@ -211,8 +211,46 @@ test("all three-child recipes round-trip with exact multiplicity; selection is c
       { id: 602, char: "日" },
     ],
   };
-  assert.equal(findCombination(triple, data)?.length, 3);
-  assert.equal(act(triple, { type: "hint" }).selected.length, 3);
+  const hinted = act(triple, { type: "hint" });
+  assert.deepEqual(hinted.hinted, [600, 601, 602]);
+  assert.equal(hinted.selected.length, 0);
+});
+
+test("hints highlight every tile in any valid pair without choosing the pair", () => {
+  const game = createGame("explore", data);
+  const tray = ["木", "木", "女", "子", "日", "月", "心"].map(
+    (char, index) => ({ id: 500 + index, char }),
+  );
+  const state = { ...game, tray };
+  assert.deepEqual(
+    findCombinableTileIds(state, data),
+    [500, 501, 502, 503, 504, 505],
+  );
+
+  const hinted = act(state, { type: "hint" });
+  assert.deepEqual(hinted.hinted, [500, 501, 502, 503, 504, 505]);
+  assert.deepEqual(hinted.selected, []);
+  assert.match(hinted.message, /6 tiles.*valid combination/);
+
+  const hidden = act(hinted, { type: "hint" });
+  assert.deepEqual(hidden.hinted, []);
+  assert.match(hidden.message, /hints hidden/i);
+
+  const split = act(hinted, { type: "split", id: hinted.board[0].id });
+  assert.deepEqual(split.hinted, []);
+});
+
+test("hints include all pieces in supported triples", () => {
+  const game = createGame("explore", data);
+  const state = {
+    ...game,
+    tray: ["中", "一", "贝", "女"].map((char, index) => ({
+      id: 700 + index,
+      char,
+    })),
+  };
+  assert.deepEqual(findCombinableTileIds(state, data), [700, 701, 702]);
+  assert.deepEqual(act(state, { type: "hint" }).hinted, [700, 701, 702]);
 });
 
 test("mixed triples accept all input orders and reject the wrong multiplicity", () => {

@@ -206,7 +206,7 @@ Interactions:
 - Click a decomposable tile face → its children move to the tray or replace it in place within the tray. A separate + control on decomposable tray tiles selects them intact.
 - Animate transformations and surviving-tile layout shifts with inert visual copies; support interruption and reduced-motion preferences.
 - Select two or three tray tiles → Combine → choose a result when needed → consumed inputs become one board tile.
-- Hints select a real available pair. No per-move network requests.
+- Hints highlight every tray tile that participates in a valid pair or supported triple without revealing which tiles match each other. No per-move network requests.
 - Challenge pauses on a hidden tab. New run or switching modes resets the table. Best challenge score is kept only for the current page visit.
 
 ---

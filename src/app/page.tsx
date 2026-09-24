@@ -226,6 +226,7 @@ function Game({ data }: { data: IndicesData }) {
   );
   function renderTile(t: Tile, area: "board" | "tray") {
     const checked = state.selected.includes(t.id);
+    const hinted = state.hinted.includes(t.id);
     const unfolds = !!decompose(data, t.char);
     const faceSplits = area === "board" || unfolds;
     return (
@@ -247,9 +248,10 @@ function Game({ data }: { data: IndicesData }) {
         onDragStart={(e) => e.preventDefault()}
       >
         <button
-          className={`tile ${area === "board" ? "board-tile" : ""} ${checked ? "selected" : ""}`}
+          className={`tile ${area === "board" ? "board-tile" : ""} ${checked ? "selected" : ""} ${hinted ? "hinted" : ""}`}
           data-select-id={!faceSplits ? t.id : undefined}
-          aria-label={`${faceSplits ? "Split" : "Select"} ${t.char}`}
+          data-hinted={hinted || undefined}
+          aria-label={`${faceSplits ? "Split" : "Select"} ${t.char}${hinted ? ", can combine with another tile" : ""}`}
           aria-pressed={!faceSplits ? checked : undefined}
           disabled={!active}
           onClick={() =>
@@ -578,6 +580,12 @@ function Game({ data }: { data: IndicesData }) {
                   <button
                     className="text-button"
                     disabled={!active}
+                    aria-pressed={state.hinted.length > 0}
+                    title={
+                      state.hinted.length
+                        ? "Hide combination hints"
+                        : "Highlight all tiles with a valid combination partner"
+                    }
                     onClick={() => send({ type: "hint" })}
                   >
                     ✧ Hint
