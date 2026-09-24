@@ -76,7 +76,7 @@ export default function Playground() {
   const [attempt, setAttempt] = useState(0);
   const [softness, setSoftness] = useState(55);
   const [reduced, setReduced] = useState(false);
-  const [mode, setMode] = useState<PhysicsMode>("fixed");
+  const [mode, setMode] = useState<PhysicsMode>("weighted");
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("raised");
   const [boardMaterial, setBoardMaterial] = useState<BoardMaterial>("bamboo");
   const [tileRepulsion, setTileRepulsion] = useState(true);

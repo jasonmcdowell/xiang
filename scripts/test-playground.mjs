@@ -359,13 +359,37 @@ try {
   let box;
   assert.equal(current.character, "想");
   assert.equal(current.boardPreset, "starters");
-  assert.equal(current.physicsMode, "fixed");
+  assert.equal(current.physicsMode, "weighted");
   assert.equal(current.visualStyle, "raised");
+  assert.equal(
+    await page
+      .locator('input[name="physics-mode"][value="weighted"]')
+      .isChecked(),
+    true,
+    "Weighted mode is selected when the Playground opens",
+  );
   const initialDetails = await page
     .locator('[aria-label="Character details for 想"]')
     .innerText();
   assert.match(initialDetails, /xiǎng/);
   assert.match(initialDetails, /believe|wish/i);
+  box = await page.locator("canvas").boundingBox();
+  const initialTileCenter = current.characters[0].tile.center;
+  current = await dragTileFace(page, box, current, "想", {
+    x: initialTileCenter.x + 18,
+    y: initialTileCenter.y + 12,
+  });
+  assert.ok(
+    Math.hypot(
+      current.characters[0].tile.center.x - initialTileCenter.x,
+      current.characters[0].tile.center.y - initialTileCenter.y,
+    ) > 1,
+    "an intact character can move immediately by dragging its tile face",
+  );
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Five starters" }).click();
+  current = await state();
+  assert.equal(current.physicsMode, "weighted");
   const repulsionControl = page.getByRole("checkbox", {
     name: /Tile repulsion/,
   });
@@ -1734,6 +1758,9 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
   await load(woodLab);
+  // Keep this geometry-heavy nested-tear scenario anchored; the startup test
+  // above separately verifies weighted movement from the default state.
+  await woodLab.locator('input[name="physics-mode"][value="fixed"]').check();
   await woodLab.getByRole("button", { name: "森", exact: true }).click();
   await woodLab.waitForFunction(
     () => JSON.parse(window.render_game_to_text()).character === "森",

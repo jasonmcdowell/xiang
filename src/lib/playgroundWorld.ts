@@ -146,7 +146,7 @@ export class PlaygroundWorld {
   message = "Pull a component outward. Stretch its seam to tear it free.";
   selectedCharacter = "想";
   boardPreset: "starters" | "single" | "custom" = "starters";
-  physicsMode: PhysicsMode = "fixed";
+  physicsMode: PhysicsMode = "weighted";
   visualStyle: VisualStyle = "raised";
   tileRepulsion = true;
   softness = 0.55;
