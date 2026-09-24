@@ -787,7 +787,9 @@ footer a {
 }
 .privacy-copy h1 {
   margin: 0 0 24px;
-  font: 400 clamp(36px, 5vw, 56px)/1.1 Georgia, serif;
+  font:
+    400 clamp(36px, 5vw, 56px)/1.1 Georgia,
+    serif;
   letter-spacing: -1.6px;
 }
 .privacy-copy p {
