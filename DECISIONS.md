@@ -498,3 +498,11 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** The board should remain easy to read as the number of tiles grows. Layout actions make it easier to reset the scene, compare related components, and avoid hand-aligning pieces. A selectable snap keeps casual tile movement tidy without taking away manual placement by default, while hints expose the supported recipe data without solving the pairing for the player.
 
 **Consequences:** Arrangement and snap animations are deterministic client-side motion, pause game-world interactions while active, and finish immediately under reduced motion. Component grouping uses only the already-loaded immediate recipes; it does not imply shared historical etymology. Hints require loose/free pieces and clear when focus changes.
+
+## D-057 — Make tear pop sound optional
+
+**Decision (2026-09-26):** Keep the synthesized pop on successful component tears, but add a Playground checkbox to enable or mute it. Start enabled to preserve the existing sound behavior; rolled-back pulls remain silent.
+
+**Why:** The pop makes a successful physical separation clear, while players should be able to choose a quieter experience.
+
+**Consequences:** The checkbox controls only tear feedback for the current Playground visit and does not affect pointer handling or other interface sounds.

@@ -36,6 +36,34 @@ const load = async (target = page) => {
       ?.textContent?.includes("xiǎng"),
   );
 };
+const installAudioSpy = (target) =>
+  target.addInitScript(() => {
+    const audioParam = {
+      setValueAtTime() {},
+      exponentialRampToValueAtTime() {},
+    };
+    window.__tearPopCount = 0;
+    window.AudioContext = class {
+      state = "running";
+      currentTime = 0;
+      destination = {};
+      createOscillator() {
+        return {
+          type: "sine",
+          frequency: audioParam,
+          connect() {},
+          start: () => window.__tearPopCount++,
+          stop() {},
+        };
+      }
+      createGain() {
+        return { gain: audioParam, connect() {} };
+      }
+      resume() {
+        return Promise.resolve();
+      }
+    };
+  });
 const screenPoint = (box, point) => ({
   x: box.x + point.x,
   y: box.y + point.y,
@@ -452,6 +480,47 @@ try {
   assertNoTileOverlap(current.characters, "five starter board");
   assertUniformTiles(current.characters, "five starter board");
   assert.equal(current.characters[0].tile.width, 156);
+
+  const tearSoundPage = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  tearSoundPage.on("pageerror", (error) => errors.push(error.message));
+  tearSoundPage.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await installAudioSpy(tearSoundPage);
+  await load(tearSoundPage);
+  const tearSoundToggle = tearSoundPage.getByRole("checkbox", {
+    name: "Pop sound when a component tears free",
+  });
+  assert.equal(await tearSoundToggle.isChecked(), true);
+  let tearSoundBox = await tearSoundPage.locator("canvas").boundingBox();
+  let tearSoundState = await state(tearSoundPage);
+  await tearComponent(tearSoundPage, tearSoundBox, tearSoundState, "想", "心");
+  assert.ok(
+    await tearSoundPage.evaluate(() => window.__tearPopCount > 0),
+    "a successful tear plays the pop when the option is enabled",
+  );
+  await tearSoundPage.mouse.up();
+  await tearSoundPage.getByRole("button", { name: "Five starters" }).click();
+  await tearSoundPage.waitForFunction(() => {
+    const game = JSON.parse(window.render_game_to_text());
+    return game.characters.length === 5 && game.characters[0].char === "想";
+  });
+  await tearSoundToggle.uncheck();
+  tearSoundBox = await tearSoundPage.locator("canvas").boundingBox();
+  tearSoundState = await state(tearSoundPage);
+  const popCountBeforeSilentTear = await tearSoundPage.evaluate(
+    () => window.__tearPopCount,
+  );
+  await tearComponent(tearSoundPage, tearSoundBox, tearSoundState, "想", "心");
+  assert.equal(
+    await tearSoundPage.evaluate(() => window.__tearPopCount),
+    popCountBeforeSilentTear,
+    "a successful tear stays silent when the option is disabled",
+  );
+  await tearSoundPage.mouse.up();
+  await tearSoundPage.close();
 
   const doubleTapLab = await browser.newPage({
     viewport: { width: 1200, height: 1000 },
@@ -2255,7 +2324,7 @@ try {
   await page.getByRole("button", { name: "Split 想", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Playground passed: bounded one-step asset preloading and early composition candidates, normalized glyph size, pronunciation/definition focus and tear feedback, double-tap unfolding, tile repulsion, arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped/silk rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, one-at-a-time and all-at-once tile arrangement, shared-component grouping, optional grid snapping, compatible-tile hints, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
+    "Playground passed: bounded one-step asset preloading and early composition candidates, normalized glyph size, pronunciation/definition focus and optional tear pop feedback, double-tap unfolding, tile repulsion, arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped/silk rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, one-at-a-time and all-at-once tile arrangement, shared-component grouping, optional grid snapping, compatible-tile hints, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
   );
 } finally {
   await browser.close();

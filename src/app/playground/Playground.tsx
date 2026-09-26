@@ -54,6 +54,7 @@ export default function Playground() {
   const pointerStartsRef = useRef(new Map<number, PointerStart>());
   const lastTapRef = useRef<PointerStart | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const tearSoundEnabledRef = useRef(true);
   const ratioRef = useRef(1);
   const settingsRef = useRef({
     softness: 55,
@@ -88,6 +89,7 @@ export default function Playground() {
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("raised");
   const [boardMaterial, setBoardMaterial] = useState<BoardMaterial>("bamboo");
   const [tileRepulsion, setTileRepulsion] = useState(true);
+  const [tearSoundEnabled, setTearSoundEnabled] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [arrangeMode, setArrangeMode] = useState<ArrangeMode>("one-by-one");
   const [focusedTileId, setFocusedTileId] = useState<number | null>(null);
@@ -154,7 +156,7 @@ export default function Playground() {
           .reverse()
           .find((object) => object.char === event.character);
         focusTile(event.character, focused?.id ?? null);
-        if (event.type === "tear") playTearPop();
+        if (event.type === "tear" && tearSoundEnabledRef.current) playTearPop();
       }
     },
     [focusTile, playTearPop],
@@ -1155,6 +1157,17 @@ export default function Playground() {
                 />
                 {t("Tile repulsion")}{" "}
                 <span>{t("loose faces nudge apart")}</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={tearSoundEnabled}
+                  onChange={(event) => {
+                    tearSoundEnabledRef.current = event.target.checked;
+                    setTearSoundEnabled(event.target.checked);
+                  }}
+                />
+                {t("Pop sound when a component tears free")}
               </label>
             </fieldset>
 
