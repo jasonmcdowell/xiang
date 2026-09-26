@@ -12,6 +12,7 @@ import {
   hitTileFace,
   inkCenter,
   measureGlyph,
+  prepareSilkSupportSurfaces,
   projectInkPoint,
   skinStrokes,
   type GlyphGeometry,
@@ -364,6 +365,12 @@ export class PlaygroundWorld {
   ) {
     const style = this.visualStyle;
     const surfacePose = surface.pose();
+    const silkSupport =
+      style === "silk"
+        ? prepareSilkSupportSurfaces(
+            this.objects.map((object) => object.surfaceBody),
+          )
+        : undefined;
     return hitInk(point, ink, body, (binding) => {
       const position = body.at(binding);
       const reference =
@@ -377,9 +384,7 @@ export class PlaygroundWorld {
         style,
         reference,
         surfacePose,
-        style === "silk"
-          ? this.objects.map((object) => object.surfaceBody)
-          : undefined,
+        silkSupport,
       ).point;
     });
   }

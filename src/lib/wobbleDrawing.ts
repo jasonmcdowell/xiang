@@ -14,10 +14,34 @@ export type InkLayer = {
   surfaceBody?: WobbleBody;
   character?: string;
 };
+export type SilkSupportSurface = {
+  body: WobbleBody;
+  pose: ReturnType<WobbleBody["pose"]>;
+  cos: number;
+  sin: number;
+  halfWidth: number;
+  halfHeight: number;
+};
 export type GlyphGeometry = {
   center: Point;
   bounds: { left: number; right: number; top: number; bottom: number };
 };
+
+export function prepareSilkSupportSurfaces(
+  bodies: WobbleBody[],
+): SilkSupportSurface[] {
+  return bodies.map((body) => {
+    const pose = body.pose();
+    return {
+      body,
+      pose,
+      cos: Math.cos(pose.angle),
+      sin: Math.sin(pose.angle),
+      halfWidth: (body.size * body.scaleX + 38) / 2 - 3,
+      halfHeight: (body.size * body.scaleY + 38) / 2 - 3,
+    };
+  });
+}
 
 export function measureGlyph(strokes: string[]): GlyphGeometry {
   const points: Point[] = [];
@@ -158,7 +182,7 @@ export function projectInkPoint(
   style: VisualStyle,
   reference: Point,
   surfacePose = surface.pose(),
-  supportSurfaces: WobbleBody[] = [surface],
+  supportSurfaces?: SilkSupportSurface[],
 ) {
   if (style === "flat") return { point, drape: 0 };
   if (style === "raised")
@@ -170,19 +194,15 @@ export function projectInkPoint(
   if (style === "silk") {
     let nearestOutside = Number.POSITIVE_INFINITY;
     let support = 0;
-    for (const candidate of supportSurfaces) {
-      const pose = candidate === surface ? surfacePose : candidate.pose();
-      const dx = point.x - pose.x;
-      const dy = point.y - pose.y;
-      const c = Math.cos(pose.angle);
-      const s = Math.sin(pose.angle);
-      const localX = c * dx + s * dy;
-      const localY = -s * dx + c * dy;
-      const halfWidth = (candidate.size * candidate.scaleX + 38) / 2 - 3;
-      const halfHeight = (candidate.size * candidate.scaleY + 38) / 2 - 3;
+    const surfaces = supportSurfaces ?? prepareSilkSupportSurfaces([surface]);
+    for (const candidate of surfaces) {
+      const dx = point.x - candidate.pose.x;
+      const dy = point.y - candidate.pose.y;
+      const localX = candidate.cos * dx + candidate.sin * dy;
+      const localY = -candidate.sin * dx + candidate.cos * dy;
       const outside = Math.max(
-        Math.abs(localX) - halfWidth,
-        Math.abs(localY) - halfHeight,
+        Math.abs(localX) - candidate.halfWidth,
+        Math.abs(localY) - candidate.halfHeight,
         0,
       );
       if (outside < nearestOutside) nearestOutside = outside;
@@ -363,12 +383,17 @@ export function drawLayers(
   const supportSurfaces = [
     ...new Set(layers.map((layer) => layer.surfaceBody ?? layer.body)),
   ];
+  const silkSupport =
+    style === "silk" ? prepareSilkSupportSurfaces(supportSurfaces) : undefined;
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, body.width, body.height);
   const drawnSurfaces = new Set<WobbleBody>();
   for (const layer of layers) {
     const surface = layer.surfaceBody ?? layer.body;
-    const surfacePose = surface.pose();
+    const surfaceSnapshot = silkSupport?.find(
+      (candidate) => candidate.body === surface,
+    );
+    const surfacePose = surfaceSnapshot?.pose ?? surface.pose();
     if (style !== "flat" && !drawnSurfaces.has(surface)) {
       drawMahjongTile(ctx, surface, ratio, style);
       drawnSurfaces.add(surface);
@@ -386,7 +411,7 @@ export function drawLayers(
         style,
         reference,
         surfacePose,
-        supportSurfaces,
+        silkSupport,
       );
     });
     const { path } = projected;
@@ -478,7 +503,7 @@ export function drawLayers(
         style,
         reference,
         surfacePose,
-        supportSurfaces,
+        silkSupport,
       ).point;
       ctx.beginPath();
       ctx.arc(pin.x, pin.y, 5, 0, Math.PI * 2);

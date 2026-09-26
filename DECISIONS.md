@@ -406,3 +406,11 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** The existing Draped mode bends strokes over their own tile edge, but does not convey a taller tile, a component trailing on the tabletop, or ink climbing onto another tile. A height-based screen-space projection can test that tactile concept without introducing a 3D renderer or changing board geometry.
 
 **Consequences:** Silk is an explicit visual and softness experiment. Tile collision and placement continue to use their existing face footprints; the visible sidewall is a 2.5D extrusion and the ground shadow is an approximation rather than 3D lighting or cloth simulation.
+
+## D-053 — Snapshot Silk support geometry once per frame
+
+**Decision (2026-09-26):** Build the supporting tile poses, rotations, and face bounds once before rendering a Silk frame, then reuse those immutable snapshots for every projected ink point and for stroke hit-testing.
+
+**Why:** The first Silk projection called `WobbleBody.pose()` for every support tile at every sampled ink vertex. `pose()` analyzes the complete deformable lattice, so the work grew with (ink samples × board tiles × lattice nodes) even though each tile's pose stays constant during one draw. A phone-sized, 3× browser profile showed Silk at about 42 fps while Flat, Raised, and Draped held about 60 fps.
+
+**Consequences:** Projection still follows the same tile geometry for drawing and hit-testing, but the per-frame transform cost is linear in tile count rather than repeated for every ink sample. Keep output deterministic and do not cache snapshots across frames, since tiles can move or deform.
