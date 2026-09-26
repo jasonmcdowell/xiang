@@ -22,6 +22,7 @@ export class WobbleBody {
   reduced = false;
   lift = 0;
   size = 1;
+  frameInset = 38;
   fixed = false;
   fixedCenter: Point;
   grabStrength = 0.8;
@@ -199,13 +200,13 @@ export class WobbleBody {
       const pose = this.pose();
       const centerX = clamp(
         target.x + grab.offset.x,
-        (this.size * this.scaleX + 38) / 2,
-        this.width - (this.size * this.scaleX + 38) / 2,
+        (this.size * this.scaleX + this.frameInset) / 2,
+        this.width - (this.size * this.scaleX + this.frameInset) / 2,
       );
       const centerY = clamp(
         target.y + grab.offset.y,
-        (this.size * this.scaleY + 38) / 2,
-        this.height - (this.size * this.scaleY + 38) / 2,
+        (this.size * this.scaleY + this.frameInset) / 2,
+        this.height - (this.size * this.scaleY + this.frameInset) / 2,
       );
       const dx = centerX - pose.x;
       const dy = centerY - pose.y;
@@ -256,6 +257,7 @@ export class WobbleBody {
     body.softness = this.softness;
     body.reduced = this.reduced;
     body.lift = this.lift;
+    body.frameInset = this.frameInset;
     body.fixed = this.fixed;
     body.fixedCenter = { ...this.fixedCenter };
     body.grabStrength = this.grabStrength;

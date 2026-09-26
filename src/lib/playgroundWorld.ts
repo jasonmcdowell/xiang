@@ -36,6 +36,7 @@ export type PlaygroundWorldEvent =
   | { type: "tear"; character: string }
   | { type: "compose"; character: string }
   | { type: "unfold"; character: string };
+export type PlaygroundBoardPreset = "starters" | "single" | "custom" | "cells";
 
 type PartAsset = PlaygroundAssets["recipes"][number]["parts"][number] & {
   embeddedGeometry: GlyphGeometry;
@@ -56,6 +57,7 @@ type SceneObject = {
   recipe: Recipe | null;
   tileFollowsInkUntilRelease: boolean;
   tileFollowOffset: Point | null;
+  snapAfterRelease: boolean;
 };
 
 type StartingTile = { char: string; center: Point };
@@ -125,10 +127,8 @@ const TILE_FACE_SIZE = 156;
 const TILE_CLEARANCE = 10;
 const GRID_GAP = 30;
 const GRID_MARGIN = 12;
-const GRID_PITCH = TILE_FACE_SIZE + GRID_GAP;
 const DEFAULT_GLYPH_SCALE = 0.36;
 const TILE_OVERLAP_EPSILON = 0.01;
-const MAGNET_FULL_ALIGNMENT_DISTANCE = TILE_FACE_SIZE + TILE_CLEARANCE * 3;
 const MAGNET_FAR_ALIGNMENT_STRENGTH = 0.15;
 const MAGNET_FULL_STRENGTH_OVERLAP = 32;
 const TILE_REPULSION_RANGE = 22;
@@ -148,11 +148,15 @@ export class PlaygroundWorld {
   private events: PlaygroundWorldEvent[] = [];
   private nextId = 1;
   private elapsed = 0;
+  private cellBoard: { cells: number; capacity: number } | null = null;
+  private tileFaceSize = TILE_FACE_SIZE;
+  private tileFaceInset = TILE_FACE_INSET;
+  private tileClearance = TILE_CLEARANCE;
   private readonly snapRadius = 12;
   phase: "whole" | "stretching" | "loose" = "whole";
   message = "Pull a component outward. Stretch its seam to tear it free.";
   selectedCharacter = "想";
-  boardPreset: "starters" | "single" | "custom" = "starters";
+  boardPreset: PlaygroundBoardPreset = "starters";
   physicsMode: PhysicsMode = "weighted";
   visualStyle: VisualStyle = "raised";
   tileRepulsion = true;
@@ -168,6 +172,45 @@ export class PlaygroundWorld {
     this.assets = assets;
     this.compileAssets();
     this.resetStarters();
+  }
+
+  get cellCapacity() {
+    return this.cellBoard?.capacity ?? null;
+  }
+
+  private get tileSizeRatio() {
+    return this.tileFaceSize / TILE_FACE_SIZE;
+  }
+
+  private get glyphScale() {
+    return DEFAULT_GLYPH_SCALE * this.tileSizeRatio;
+  }
+
+  setCellBoard(cells: 3 | 4 | 5 | 6) {
+    this.cellBoard = { cells, capacity: cells * cells };
+    const squareSize = Math.min(this.width, this.height);
+    const cellSize = (squareSize * 0.88) / cells;
+    this.tileFaceSize = Math.min(TILE_FACE_SIZE, cellSize * 0.86);
+    this.tileFaceInset = TILE_FACE_INSET * (this.tileFaceSize / TILE_FACE_SIZE);
+    this.tileClearance = TILE_CLEARANCE * (this.tileFaceSize / TILE_FACE_SIZE);
+    this.snapToGrid = true;
+  }
+
+  startCellBoard(char: string) {
+    if (!this.cellBoard) throw new Error("Choose a cell board first.");
+    if (!this.assets.glyphs[char])
+      throw new Error(`Missing playground glyph for ${char}.`);
+    this.cancelAll();
+    this.events.length = 0;
+    this.boardPreset = "cells";
+    this.customStarts = null;
+    this.selectedCharacter = char;
+    this.objects = [this.createObject(char, this.gridCenters(1)[0], false)];
+    this.preview = null;
+    this.setPhase(
+      "whole",
+      `${char} is ready. Discover new characters before the board fills.`,
+    );
   }
 
   private compileAssets() {
@@ -306,22 +349,30 @@ export class PlaygroundWorld {
     char: string,
     center: Point,
     free: boolean,
-    scaleX = DEFAULT_GLYPH_SCALE,
-    scaleY = DEFAULT_GLYPH_SCALE,
+    scaleX?: number,
+    scaleY?: number,
     velocity: Point = { x: 0, y: 0 },
     componentPiece = false,
   ): SceneObject {
     const strokes = this.assets.glyphs[char];
     if (!strokes) throw new Error(`Missing playground glyph for ${char}.`);
-    const body = new WobbleBody(this.width, this.height, scaleX, scaleY);
+    const actualScaleX = scaleX ?? this.glyphScale;
+    const actualScaleY = scaleY ?? this.glyphScale;
+    const body = new WobbleBody(
+      this.width,
+      this.height,
+      actualScaleX,
+      actualScaleY,
+    );
     const surfaceSize = Math.min(390, this.width * 0.8, this.height * 0.75);
-    const tileScale = (TILE_FACE_SIZE - TILE_FACE_INSET) / surfaceSize;
+    const tileScale = (this.tileFaceSize - this.tileFaceInset) / surfaceSize;
     const surfaceBody = new WobbleBody(
       this.width,
       this.height,
       tileScale,
       tileScale,
     );
+    surfaceBody.frameInset = this.tileFaceInset;
     body.setCenter(center.x, center.y);
     surfaceBody.setCenter(center.x, center.y);
     body.setVelocity(velocity.x, velocity.y);
@@ -338,6 +389,7 @@ export class PlaygroundWorld {
       recipe: this.recipeByChar.get(char) ?? null,
       tileFollowsInkUntilRelease: false,
       tileFollowOffset: null,
+      snapAfterRelease: false,
     };
   }
 
@@ -371,7 +423,7 @@ export class PlaygroundWorld {
   }
 
   setSnapToGrid(enabled: boolean) {
-    this.snapToGrid = enabled;
+    this.snapToGrid = !!this.cellBoard || enabled;
   }
 
   compatibleTileIds(id: number | null) {
@@ -463,27 +515,61 @@ export class PlaygroundWorld {
 
   private gridCenters(count: number): Point[] {
     if (!count) return [];
+    if (this.cellBoard) {
+      const board = this.cellBoard;
+      const square = Math.min(this.width, this.height);
+      const origin = {
+        x: (this.width - square) / 2,
+        y: (this.height - square) / 2,
+      };
+      const cell = (square * 0.88) / board.cells;
+      const startX = origin.x + square * 0.06;
+      const startY = origin.y + square * 0.06;
+      return Array.from(
+        { length: Math.min(count, board.capacity) },
+        (_, index) => ({
+          x: startX + cell * ((index % board.cells) + 0.5),
+          y: startY + cell * (Math.floor(index / board.cells) + 0.5),
+        }),
+      );
+    }
     const maxColumns = Math.max(
       1,
-      Math.floor((this.width - GRID_MARGIN * 2 + GRID_GAP) / GRID_PITCH),
+      Math.floor(
+        (this.width - GRID_MARGIN * 2 + GRID_GAP * this.tileSizeRatio) /
+          (this.tileFaceSize + GRID_GAP * this.tileSizeRatio),
+      ),
     );
     const columns = Math.min(maxColumns, count);
     const rows = Math.ceil(count / columns);
     const availableX = Math.max(
       0,
-      this.width - TILE_FACE_SIZE - GRID_MARGIN * 2,
+      this.width - this.tileFaceSize - GRID_MARGIN * 2,
     );
     const availableY = Math.max(
       0,
-      this.height - TILE_FACE_SIZE - GRID_MARGIN * 2,
+      this.height - this.tileFaceSize - GRID_MARGIN * 2,
     );
     const pitchX =
-      columns > 1 ? Math.min(GRID_PITCH, availableX / (columns - 1)) : 0;
-    const pitchY = rows > 1 ? Math.min(GRID_PITCH, availableY / (rows - 1)) : 0;
+      columns > 1
+        ? Math.min(
+            this.tileFaceSize + GRID_GAP * this.tileSizeRatio,
+            availableX / (columns - 1),
+          )
+        : 0;
+    const pitchY =
+      rows > 1
+        ? Math.min(
+            this.tileFaceSize + GRID_GAP * this.tileSizeRatio,
+            availableY / (rows - 1),
+          )
+        : 0;
     return Array.from({ length: count }, (_, index) => ({
-      x: GRID_MARGIN + TILE_FACE_SIZE / 2 + (index % columns) * pitchX,
+      x: GRID_MARGIN + this.tileFaceSize / 2 + (index % columns) * pitchX,
       y:
-        GRID_MARGIN + TILE_FACE_SIZE / 2 + Math.floor(index / columns) * pitchY,
+        GRID_MARGIN +
+        this.tileFaceSize / 2 +
+        Math.floor(index / columns) * pitchY,
     }));
   }
 
@@ -520,7 +606,9 @@ export class PlaygroundWorld {
   private snapTileToGrid(id: number) {
     const object = this.objects.find((candidate) => candidate.id === id);
     if (!object) return;
-    const slots = this.gridCenters(this.objects.length + 1);
+    const slots = this.gridCenters(
+      this.cellBoard?.capacity ?? this.objects.length + 1,
+    );
     const face = this.tileDimensions(object.surfaceBody);
     const open = slots.filter((center) =>
       this.objects
@@ -551,6 +639,52 @@ export class PlaygroundWorld {
       duration: this.reduced ? 0.001 : 0.34,
     };
     this.tileAnimation = { elapsed: 0, moves: [move] };
+  }
+
+  private placeOnOpenCells(
+    movingObjects: SceneObject[],
+    ignoredIds: ReadonlySet<number> = new Set(),
+  ) {
+    if (!this.cellBoard || !movingObjects.length) return;
+    const moving = new Set(movingObjects);
+    const occupied = this.objects.filter(
+      (object) => !moving.has(object) && !ignoredIds.has(object.id),
+    );
+    const used = new Set<number>();
+    const slots = this.gridCenters(this.cellBoard.capacity);
+    for (const object of movingObjects) {
+      const face = this.tileDimensions(object.surfaceBody);
+      const open = slots
+        .map((center, index) => ({ center, index }))
+        .filter(
+          ({ center, index }) =>
+            !used.has(index) &&
+            occupied.every((candidate) =>
+              this.facesClear(
+                center,
+                face,
+                candidate.surfaceBody.pose(),
+                this.tileFootprint(candidate.surfaceBody),
+              ),
+            ),
+        );
+      if (!open.length) continue;
+      const from = object.surfaceBody.pose();
+      const { center, index } = open.reduce((best, candidate) =>
+        Math.hypot(candidate.center.x - from.x, candidate.center.y - from.y) <
+        Math.hypot(best.center.x - from.x, best.center.y - from.y)
+          ? candidate
+          : best,
+      );
+      const dx = center.x - from.x;
+      const dy = center.y - from.y;
+      object.surfaceBody.translate(dx, dy);
+      object.body.translate(dx, dy);
+      object.surfaceBody.setVelocity(0, 0);
+      object.body.setVelocity(0, 0);
+      used.add(index);
+      occupied.push(object);
+    }
   }
 
   takeEvents() {
@@ -605,6 +739,10 @@ export class PlaygroundWorld {
   }
 
   reset(char?: string) {
+    if (char === undefined && this.boardPreset === "cells") {
+      this.startCellBoard(this.selectedCharacter);
+      return;
+    }
     if (char === undefined && this.boardPreset === "starters") {
       this.resetStarters();
       return;
@@ -655,14 +793,16 @@ export class PlaygroundWorld {
         "There isn’t room for another tile. Move a tile and try again.";
       return "full";
     }
-    if (this.boardPreset !== "custom")
+    if (!this.cellBoard && this.boardPreset !== "custom")
       this.customStarts = this.objects.map((object) => ({
         char: object.char,
         center: { ...object.surfaceBody.pose() },
       }));
-    this.customStarts ??= [];
-    this.customStarts.push({ char, center: { ...center } });
-    this.boardPreset = "custom";
+    if (!this.cellBoard) {
+      this.customStarts ??= [];
+      this.customStarts.push({ char, center: { ...center } });
+      this.boardPreset = "custom";
+    }
     this.selectedCharacter = char;
     this.objects.push(this.createObject(char, center, false));
     this.message = this.recipeByChar.has(char)
@@ -695,8 +835,8 @@ export class PlaygroundWorld {
         part.char,
         placements.centers[index],
         true,
-        DEFAULT_GLYPH_SCALE,
-        DEFAULT_GLYPH_SCALE,
+        this.glyphScale,
+        this.glyphScale,
         { x: 0, y: 0 },
         true,
       ),
@@ -717,7 +857,23 @@ export class PlaygroundWorld {
   }
 
   private findOpenTileCenter(): Point | null {
-    const halfSize = TILE_FACE_SIZE / 2;
+    if (this.cellBoard) {
+      if (this.objects.length >= this.cellBoard.capacity) return null;
+      const face = { width: this.tileFaceSize, height: this.tileFaceSize };
+      return (
+        this.gridCenters(this.cellBoard.capacity).find((center) =>
+          this.objects.every((object) =>
+            this.facesClear(
+              center,
+              face,
+              object.surfaceBody.pose(),
+              this.tileFootprint(object.surfaceBody),
+            ),
+          ),
+        ) ?? null
+      );
+    }
+    const halfSize = this.tileFaceSize / 2;
     const margin = halfSize + 8;
     if (this.width < margin * 2 || this.height < margin * 2) return null;
 
@@ -735,7 +891,7 @@ export class PlaygroundWorld {
       const coordinates = new Set<number>([size / 2, minimum, maximum]);
       for (const item of occupied) {
         const separation =
-          halfSize + item.footprint[extent] / 2 + TILE_CLEARANCE;
+          halfSize + item.footprint[extent] / 2 + this.tileClearance;
         coordinates.add(
           clamp(item.center[axis] - separation, minimum, maximum),
         );
@@ -762,9 +918,9 @@ export class PlaygroundWorld {
       const clear = occupied.every(
         ({ center, footprint }) =>
           Math.abs(candidate.x - center.x) >=
-            halfSize + footprint.width / 2 + TILE_CLEARANCE ||
+            halfSize + footprint.width / 2 + this.tileClearance ||
           Math.abs(candidate.y - center.y) >=
-            halfSize + footprint.height / 2 + TILE_CLEARANCE,
+            halfSize + footprint.height / 2 + this.tileClearance,
       );
       if (clear) return { x: candidate.x, y: candidate.y };
     }
@@ -776,7 +932,7 @@ export class PlaygroundWorld {
     if (!starts?.length) return;
     this.cancelAll();
     this.events.length = 0;
-    const halfSize = TILE_FACE_SIZE / 2;
+    const halfSize = this.tileFaceSize / 2;
     const fitCenter = (center: Point): Point => ({
       x: clamp(
         center.x,
@@ -813,17 +969,17 @@ export class PlaygroundWorld {
     this.selectedCharacter = "想";
     const characters = ["想", "相", "明", "休", "好"];
     const columns =
-      this.width >= TILE_FACE_SIZE * 3 + 80
+      this.width >= this.tileFaceSize * 3 + 80
         ? 3
-        : this.width >= TILE_FACE_SIZE * 2 + TILE_CLEARANCE + 24
+        : this.width >= this.tileFaceSize * 2 + this.tileClearance + 24
           ? 2
           : 1;
     const rows = Math.ceil(characters.length / columns);
     const margin = 12;
-    const maxXSpan = Math.max(0, this.width - TILE_FACE_SIZE - margin * 2);
-    const maxYSpan = Math.max(0, this.height - TILE_FACE_SIZE - margin * 2);
-    const desiredXSpan = (columns - 1) * (TILE_FACE_SIZE + 44);
-    const desiredYSpan = (rows - 1) * (TILE_FACE_SIZE + 44);
+    const maxXSpan = Math.max(0, this.width - this.tileFaceSize - margin * 2);
+    const maxYSpan = Math.max(0, this.height - this.tileFaceSize - margin * 2);
+    const desiredXSpan = (columns - 1) * (this.tileFaceSize + 44);
+    const desiredYSpan = (rows - 1) * (this.tileFaceSize + 44);
     const xSpan = Math.min(maxXSpan, Math.max(desiredXSpan, maxXSpan * 0.72));
     const ySpan = Math.min(maxYSpan, Math.max(desiredYSpan, maxYSpan * 0.72));
     this.objects = characters.map((char, index) => {
@@ -850,11 +1006,40 @@ export class PlaygroundWorld {
   resize(width: number, height: number) {
     const selected = this.selectedCharacter;
     const preset = this.boardPreset;
+    const cellCount = this.cellBoard?.cells;
+    const cellCharacters =
+      preset === "cells"
+        ? this.objects.map((object) => ({
+            char: object.char,
+            free: object.free,
+            componentPiece: object.componentPiece,
+          }))
+        : null;
     this.cancelAll();
     this.width = width;
     this.height = height;
     this.compileAssets();
-    if (preset === "starters") this.resetStarters();
+    if (preset === "cells" && cellCount) {
+      this.setCellBoard(cellCount as 3 | 4 | 5 | 6);
+      this.events.length = 0;
+      this.boardPreset = "cells";
+      this.objects = (cellCharacters ?? []).map((object, index) =>
+        this.createObject(
+          object.char,
+          this.gridCenters(cellCharacters!.length)[index],
+          object.free,
+          undefined,
+          undefined,
+          { x: 0, y: 0 },
+          object.componentPiece,
+        ),
+      );
+      this.preview = null;
+      this.setPhase(
+        this.objects.length > 1 ? "loose" : "whole",
+        `${this.objects.length} characters are ready on the grid.`,
+      );
+    } else if (preset === "starters") this.resetStarters();
     else if (preset === "custom") this.resetCustomBoard();
     else this.reset(selected);
   }
@@ -1063,10 +1248,14 @@ export class PlaygroundWorld {
         !contact.tileGrip && releasedObject?.tileFollowsInkUntilRelease;
       if (
         this.snapToGrid &&
-        (contact.tileGrip || releasedTileFollowsInk) &&
+        (contact.tileGrip ||
+          releasedTileFollowsInk ||
+          releasedObject?.snapAfterRelease) &&
         !this.findMagnet()
-      )
+      ) {
         this.snapTileToGrid(contact.entityId);
+        if (releasedObject) releasedObject.snapAfterRelease = false;
+      }
     }
   }
 
@@ -1111,8 +1300,8 @@ export class PlaygroundWorld {
 
   private tileDimensions(surfaceBody: WobbleBody) {
     return {
-      width: surfaceBody.size * surfaceBody.scaleX + TILE_FACE_INSET,
-      height: surfaceBody.size * surfaceBody.scaleY + TILE_FACE_INSET,
+      width: surfaceBody.size * surfaceBody.scaleX + this.tileFaceInset,
+      height: surfaceBody.size * surfaceBody.scaleY + this.tileFaceInset,
     };
   }
 
@@ -1205,15 +1394,41 @@ export class PlaygroundWorld {
   ) {
     return (
       Math.abs(centerA.x - centerB.x) >=
-        (faceA.width + faceB.width) / 2 + TILE_CLEARANCE ||
+        (faceA.width + faceB.width) / 2 + this.tileClearance ||
       Math.abs(centerA.y - centerB.y) >=
-        (faceA.height + faceB.height) / 2 + TILE_CLEARANCE
+        (faceA.height + faceB.height) / 2 + this.tileClearance
     );
   }
 
   private planUnfold(source: SceneObject) {
     const recipe = source.recipe;
     if (!recipe) return null;
+    if (this.cellBoard) {
+      if (this.objects.length >= this.cellBoard.capacity) return null;
+      const face = { width: this.tileFaceSize, height: this.tileFaceSize };
+      const parent = source.surfaceBody.pose();
+      const available = this.gridCenters(this.cellBoard.capacity)
+        .filter((center) =>
+          this.objects
+            .filter((object) => object !== source)
+            .every((object) =>
+              this.facesClear(
+                center,
+                face,
+                object.surfaceBody.pose(),
+                this.tileFootprint(object.surfaceBody),
+              ),
+            ),
+        )
+        .sort(
+          (a, b) =>
+            Math.hypot(a.x - parent.x, a.y - parent.y) -
+            Math.hypot(b.x - parent.x, b.y - parent.y),
+        );
+      return available.length >= 2
+        ? { centers: [available[0], available[1]] }
+        : null;
+    }
     const layouts = recipe.parts.map((part) =>
       componentLayout(
         source.body,
@@ -1229,10 +1444,10 @@ export class PlaygroundWorld {
     const [first, second] = baseCenters;
     let dx = second.x - first.x;
     let dy = second.y - first.y;
-    const face = { width: TILE_FACE_SIZE, height: TILE_FACE_SIZE };
+    const face = { width: this.tileFaceSize, height: this.tileFaceSize };
     // Leave a pixel of slack so the exact target doesn't fail clearance from
     // floating-point rounding after the component vector is rescaled.
-    const required = TILE_FACE_SIZE + TILE_CLEARANCE + 1;
+    const required = this.tileFaceSize + this.tileClearance + 1;
     if (!this.facesClear(first, face, second, face)) {
       const ratioX = Math.abs(dx) / required;
       const ratioY = Math.abs(dy) / required;
@@ -1256,7 +1471,7 @@ export class PlaygroundWorld {
       return null;
 
     const existing = this.objects.filter((object) => object !== source);
-    const step = Math.round(TILE_FACE_SIZE / 3);
+    const step = Math.max(12, Math.round(this.tileFaceSize / 3));
     const maxRing = Math.ceil(Math.max(this.width, this.height) / step);
     const offsets: Point[] = [{ x: 0, y: 0 }];
     for (let ring = 1; ring <= maxRing; ring++)
@@ -1319,8 +1534,8 @@ export class PlaygroundWorld {
     });
     const [first, second] = placements;
     const face = this.tileDimensions(source.surfaceBody);
-    const requiredX = face.width + TILE_CLEARANCE;
-    const requiredY = face.height + TILE_CLEARANCE;
+    const requiredX = face.width + this.tileClearance;
+    const requiredY = face.height + this.tileClearance;
     const x = Math.abs(second.center.x - first.center.x);
     const y = Math.abs(second.center.y - first.center.y);
     const withinBoard = placements.every(
@@ -1330,9 +1545,12 @@ export class PlaygroundWorld {
         center.y >= tileFace.height / 2 &&
         center.y <= this.height - tileFace.height / 2,
     );
+    const hasCellCapacity =
+      !this.cellBoard || this.objects.length < this.cellBoard.capacity;
     const ready =
       this.facesClear(first.center, first.face, second.center, second.face) &&
-      withinBoard;
+      withinBoard &&
+      hasCellCapacity;
     return {
       placements,
       clearance: {
@@ -1370,8 +1588,8 @@ export class PlaygroundWorld {
         part.char,
         center,
         true,
-        DEFAULT_GLYPH_SCALE,
-        DEFAULT_GLYPH_SCALE,
+        this.glyphScale,
+        this.glyphScale,
         held ? { x: 0, y: 0 } : groupBody.meanVelocity(),
         true,
       );
@@ -1391,6 +1609,15 @@ export class PlaygroundWorld {
       ...this.objects.filter((object) => object !== source),
       ...made,
     ];
+    if (this.cellBoard) {
+      const heldObjectIds = new Set(
+        [...heldGroups].map((index) => made[index].id),
+      );
+      this.placeOnOpenCells(
+        made.filter((_, index) => !heldGroups.has(index)),
+        heldObjectIds,
+      );
+    }
     for (const [pointerId, contact] of this.contacts) {
       if (contact.entityId !== source.id || contact.group === null) continue;
       const group = contact.group;
@@ -1459,8 +1686,8 @@ export class PlaygroundWorld {
             baseLayoutB = partB.layout,
             // Choose the largest scale supported by both pieces, without
             // letting independently full-size pieces inflate their parent.
-            parentScaleX = DEFAULT_GLYPH_SCALE,
-            parentScaleY = DEFAULT_GLYPH_SCALE,
+            parentScaleX = this.glyphScale,
+            parentScaleY = this.glyphScale,
             layoutA = {
               ...baseLayoutA,
               parentOffset: {
@@ -1491,11 +1718,11 @@ export class PlaygroundWorld {
             actualX = anchorB.x - anchorA.x,
             actualY = anchorB.y - anchorA.y,
             reversedX =
-              Math.abs(expectedX) > TILE_CLEARANCE &&
-              actualX * expectedX < -TILE_CLEARANCE * Math.abs(expectedX),
+              Math.abs(expectedX) > this.tileClearance &&
+              actualX * expectedX < -this.tileClearance * Math.abs(expectedX),
             reversedY =
-              Math.abs(expectedY) > TILE_CLEARANCE &&
-              actualY * expectedY < -TILE_CLEARANCE * Math.abs(expectedY);
+              Math.abs(expectedY) > this.tileClearance &&
+              actualY * expectedY < -this.tileClearance * Math.abs(expectedY);
           if (reversedX || reversedY) continue;
           if (!best || distance < best.distance)
             best = {
@@ -1526,9 +1753,13 @@ export class PlaygroundWorld {
     const alignment =
       MAGNET_FAR_ALIGNMENT_STRENGTH +
       (1 - MAGNET_FAR_ALIGNMENT_STRENGTH) *
-        clamp(1 - match.distance / MAGNET_FULL_ALIGNMENT_DISTANCE, 0, 1);
+        clamp(
+          1 - match.distance / (this.tileFaceSize + this.tileClearance * 3),
+          0,
+          1,
+        );
     const overlap = clamp(
-      match.overlapDepth / MAGNET_FULL_STRENGTH_OVERLAP,
+      match.overlapDepth / (MAGNET_FULL_STRENGTH_OVERLAP * this.tileSizeRatio),
       0,
       1,
     );
@@ -1554,7 +1785,8 @@ export class PlaygroundWorld {
         const gapY =
           (footprintA.height + footprintB.height) / 2 -
           Math.abs(positionB.y - positionA.y);
-        const penetration = Math.min(gapX, gapY) + TILE_REPULSION_RANGE;
+        const repulsionRange = TILE_REPULSION_RANGE * this.tileSizeRatio;
+        const penetration = Math.min(gapX, gapY) + repulsionRange;
         if (penetration <= 0) continue;
 
         let dx = positionB.x - positionA.x;
@@ -1565,13 +1797,16 @@ export class PlaygroundWorld {
           dy = 0;
           distance = 1;
         }
-        const progress = clamp(penetration / TILE_REPULSION_RANGE, 0, 1);
+        const progress = clamp(penetration / repulsionRange, 0, 1);
         const compatible =
           magneticPair &&
           ((magneticPair.a === a && magneticPair.b === b) ||
             (magneticPair.a === b && magneticPair.b === a));
         const force =
-          TILE_REPULSION_FORCE * progress ** 2 * (compatible ? 0.15 : 1);
+          TILE_REPULSION_FORCE *
+          this.tileSizeRatio *
+          progress ** 2 *
+          (compatible ? 0.15 : 1);
         const direction = { x: dx / distance, y: dy / distance };
         const movableA = !a.surfaceBody.fixed && !directlyHeld.has(a.id);
         const movableB = !b.surfaceBody.fixed && !directlyHeld.has(b.id);
@@ -1682,6 +1917,13 @@ export class PlaygroundWorld {
         ? composed.surfaceBody.startWholeDrag(contact.target, pointerId)
         : composed.body.start(contact.target, pointerId);
       if (contact.tileGrip) composed.body.setVelocity(0, 0);
+    }
+    if (this.cellBoard) {
+      const isHeld = [...this.contacts.values()].some(
+        (contact) => contact.entityId === composed.id,
+      );
+      if (isHeld) composed.snapAfterRelease = true;
+      else this.placeOnOpenCells([composed]);
     }
     const stillLoose = this.objects.length > 1;
     this.setPhase(

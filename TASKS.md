@@ -178,3 +178,11 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Let the focused loose tile highlight all compatible loose tiles; clear hints when focus changes.
 - [x] Add Traditional and Simplified Chinese labels and reduced-motion handling.
 - [x] Verify grid order, animation sequencing, shared 木 grouping, snap placement, and 想 → 相 + 心 hint highlighting in the browser suite.
+
+## Follow-up — Discovery Run Playground game
+
+- [x] Add accessible Playground and Discovery Run tabs while preserving the existing Playground scene when switching.
+- [x] Add a separate Discovery Run state machine for collection selection, 3×3 through 6×6 board capacities, 10-second arrivals, unique discoveries, scoring, pause-on-tab-switch, and game over.
+- [x] Add square Go-inspired cell boards whose grid centers match tile placement; scale all physical tiles uniformly to fit each selected grid.
+- [x] Reuse physical decomposition and composition; count every new off-collection character observed on the board for the duration of the run.
+- [x] Verify scoring/history, capacity end conditions, timed arrivals, dynamic glyph loading, tab switching, mobile layout, and reduced motion in unit and browser checks.

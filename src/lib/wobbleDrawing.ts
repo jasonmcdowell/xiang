@@ -38,8 +38,12 @@ export function prepareSilkSupportSurfaces(
       pose,
       cos: Math.cos(pose.angle),
       sin: Math.sin(pose.angle),
-      halfWidth: (body.size * body.scaleX + 38) / 2 - 3,
-      halfHeight: (body.size * body.scaleY + 38) / 2 - 3,
+      halfWidth:
+        (body.size * body.scaleX + body.frameInset) / 2 -
+        3 * (body.frameInset / 38),
+      halfHeight:
+        (body.size * body.scaleY + body.frameInset) / 2 -
+        3 * (body.frameInset / 38),
     };
   });
 }
@@ -164,12 +168,13 @@ export function hitTileFace(
   const s = Math.sin(pose.angle);
   const localX = c * dx + s * dy;
   const localY = -s * dx + c * dy;
-  const halfWidth = (body.size * body.scaleX + 38) / 2;
-  const halfHeight = (body.size * body.scaleY + 38) / 2;
+  const halfWidth = (body.size * body.scaleX + body.frameInset) / 2;
+  const halfHeight = (body.size * body.scaleY + body.frameInset) / 2;
   const onFace =
     Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
-  const offsetX = style === "silk" ? SILK_DEPTH_X : 5;
-  const offsetY = style === "silk" ? SILK_DEPTH_Y : 11;
+  const scale = body.frameInset / 38;
+  const offsetX = (style === "silk" ? SILK_DEPTH_X : 5) * scale;
+  const offsetY = (style === "silk" ? SILK_DEPTH_Y : 11) * scale;
   const onOffsetBase =
     Math.abs(localX - offsetX) <= halfWidth &&
     Math.abs(localY - offsetY) <= halfHeight;
@@ -209,18 +214,19 @@ export function projectInkPoint(
       if (outside < nearestOutside) nearestOutside = outside;
       if (outside === 0) support = 1;
     }
-    const edgeT = clamp(nearestOutside / 19, 0, 1);
+    const silkScale = surface.frameInset / 38;
+    const edgeT = clamp(nearestOutside / (19 * silkScale), 0, 1);
     const edgeDrop = edgeT * edgeT * (3 - 2 * edgeT);
     const pulled = Math.hypot(point.x - reference.x, point.y - reference.y);
-    const pullT = clamp((pulled - 14) / 46, 0, 1);
+    const pullT = clamp((pulled - 14 * silkScale) / (46 * silkScale), 0, 1);
     const pullDrop = pullT * pullT * (3 - 2 * pullT);
     const drop = Math.max(edgeDrop, pullDrop * (1 - support));
     // Screen-space height: ink sinks below the tile top at its own edge, but
     // rises again when its path crosses the top of another tile.
     return {
       point: {
-        x: point.x + SILK_DEPTH_X * drop,
-        y: point.y + SILK_DEPTH_Y * drop,
+        x: point.x + SILK_DEPTH_X * silkScale * drop,
+        y: point.y + SILK_DEPTH_Y * silkScale * drop,
       },
       drape: drop,
     };
@@ -232,21 +238,22 @@ export function projectInkPoint(
   const s = Math.sin(surfacePose.angle);
   const localX = c * dx + s * dy;
   const localY = -s * dx + c * dy;
-  const halfWidth = (surface.size * surface.scaleX) / 2 + 18;
-  const halfHeight = (surface.size * surface.scaleY) / 2 + 18;
+  const styleScale = surface.frameInset / 38;
+  const halfWidth = (surface.size * surface.scaleX) / 2 + 18 * styleScale;
+  const halfHeight = (surface.size * surface.scaleY) / 2 + 18 * styleScale;
   const outside = Math.max(
     Math.abs(localX) - halfWidth,
     Math.abs(localY) - halfHeight,
     0,
   );
-  const edgeT = clamp(outside / 22, 0, 1);
+  const edgeT = clamp(outside / (22 * styleScale), 0, 1);
   const edgeDrape = edgeT * edgeT * (3 - 2 * edgeT);
   const pulled = Math.hypot(point.x - reference.x, point.y - reference.y);
-  const pullT = clamp((pulled - 8) / 34, 0, 1);
+  const pullT = clamp((pulled - 8 * styleScale) / (34 * styleScale), 0, 1);
   const pullDrape = pullT * pullT * (3 - 2 * pullT);
   const drape = Math.max(edgeDrape, pullDrape);
-  const depth = 19 * drape;
-  const lift = inkBody.lift * 5 * (1 - drape);
+  const depth = 19 * styleScale * drape;
+  const lift = inkBody.lift * 5 * styleScale * (1 - drape);
   // The fixed camera shows the tile's front/right thickness as a shallow
   // down-and-right projection. The same profile is used by canvas hit tests.
   const offsetX = (c * 0.42 - s * 0.9) * depth;
@@ -286,21 +293,22 @@ function drawMahjongTile(
   style: VisualStyle,
 ) {
   const pose = body.pose();
-  const width = body.size * body.scaleX + 38;
-  const height = body.size * body.scaleY + 38;
+  const width = body.size * body.scaleX + body.frameInset;
+  const height = body.size * body.scaleY + body.frameInset;
   const left = -width / 2;
   const top = -height / 2;
-  const sideX = style === "silk" ? SILK_DEPTH_X : 5;
-  const sideY = style === "silk" ? SILK_DEPTH_Y : 11;
+  const scale = body.frameInset / 38;
+  const sideX = (style === "silk" ? SILK_DEPTH_X : 5) * scale;
+  const sideY = (style === "silk" ? SILK_DEPTH_Y : 11) * scale;
   ctx.save();
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.angle);
   ctx.shadowColor = "rgba(48, 43, 31, .24)";
-  ctx.shadowBlur = 17;
-  ctx.shadowOffsetX = 6;
-  ctx.shadowOffsetY = sideY + 6;
-  roundedRect(ctx, left + sideX, top + sideY, width, height, 20);
+  ctx.shadowBlur = 17 * scale;
+  ctx.shadowOffsetX = 6 * scale;
+  ctx.shadowOffsetY = sideY + 6 * scale;
+  roundedRect(ctx, left + sideX, top + sideY, width, height, 20 * scale);
   ctx.fillStyle = "#a89069";
   ctx.fill();
   ctx.shadowColor = "transparent";
@@ -316,18 +324,24 @@ function drawMahjongTile(
     side.addColorStop(0.45, "#90754e");
     side.addColorStop(1, "#6e5d43");
     ctx.beginPath();
-    ctx.moveTo(left + 14, top + height - 2);
-    ctx.lineTo(left + width - 14, top + height - 2);
-    ctx.lineTo(left + width - 14 + sideX, top + height - 2 + sideY);
-    ctx.lineTo(left + 14 + sideX, top + height - 2 + sideY);
+    ctx.moveTo(left + 14 * scale, top + height - 2 * scale);
+    ctx.lineTo(left + width - 14 * scale, top + height - 2 * scale);
+    ctx.lineTo(
+      left + width - 14 * scale + sideX,
+      top + height - 2 * scale + sideY,
+    );
+    ctx.lineTo(left + 14 * scale + sideX, top + height - 2 * scale + sideY);
     ctx.closePath();
     ctx.fillStyle = side;
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(left + width - 2, top + 15);
-    ctx.lineTo(left + width - 2, top + height - 15);
-    ctx.lineTo(left + width - 2 + sideX, top + height - 15 + sideY);
-    ctx.lineTo(left + width - 2 + sideX, top + 15 + sideY);
+    ctx.moveTo(left + width - 2 * scale, top + 15 * scale);
+    ctx.lineTo(left + width - 2 * scale, top + height - 15 * scale);
+    ctx.lineTo(
+      left + width - 2 * scale + sideX,
+      top + height - 15 * scale + sideY,
+    );
+    ctx.lineTo(left + width - 2 * scale + sideX, top + 15 * scale + sideY);
     ctx.closePath();
     ctx.fillStyle = "#8b724e";
     ctx.fill();
@@ -337,19 +351,26 @@ function drawMahjongTile(
   face.addColorStop(0, "#fffdf5");
   face.addColorStop(0.55, "#f2eddf");
   face.addColorStop(1, "#e5dcc8");
-  roundedRect(ctx, left, top, width, height, 19);
+  roundedRect(ctx, left, top, width, height, 19 * scale);
   ctx.fillStyle = face;
   ctx.fill();
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.5 * scale;
   ctx.strokeStyle = "rgba(143, 120, 80, .54)";
   ctx.stroke();
-  roundedRect(ctx, left + 6, top + 6, width - 12, height - 12, 14);
+  roundedRect(
+    ctx,
+    left + 6 * scale,
+    top + 6 * scale,
+    width - 12 * scale,
+    height - 12 * scale,
+    14 * scale,
+  );
   ctx.lineWidth = 1;
   ctx.strokeStyle = "rgba(255, 255, 249, .92)";
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(left + 22, top + height - 8);
-  ctx.lineTo(left + width - 22, top + height - 8);
+  ctx.moveTo(left + 22 * scale, top + height - 8 * scale);
+  ctx.lineTo(left + width - 22 * scale, top + height - 8 * scale);
   ctx.strokeStyle = "rgba(133, 110, 74, .16)";
   ctx.stroke();
   ctx.restore();
@@ -361,17 +382,25 @@ function drawTileHighlight(
   ratio: number,
 ) {
   const pose = body.pose();
-  const width = body.size * body.scaleX + 38;
-  const height = body.size * body.scaleY + 38;
+  const width = body.size * body.scaleX + body.frameInset;
+  const height = body.size * body.scaleY + body.frameInset;
+  const scale = body.frameInset / 38;
   ctx.save();
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.angle);
   ctx.shadowColor = "rgba(190, 119, 36, .48)";
-  ctx.shadowBlur = 10;
-  ctx.lineWidth = 3;
+  ctx.shadowBlur = 10 * scale;
+  ctx.lineWidth = 3 * scale;
   ctx.strokeStyle = "#bd762b";
-  roundedRect(ctx, -width / 2 - 4, -height / 2 - 4, width + 8, height + 8, 23);
+  roundedRect(
+    ctx,
+    -width / 2 - 4 * scale,
+    -height / 2 - 4 * scale,
+    width + 8 * scale,
+    height + 8 * scale,
+    23 * scale,
+  );
   ctx.stroke();
   ctx.restore();
 }

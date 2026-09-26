@@ -80,11 +80,41 @@ export default function PlaygroundBoard({
           height="164"
           patternUnits="userSpaceOnUse"
         >
-          <rect width="1000" height="32" y="2" rx="13" fill="url(#bamboo-rod)" />
-          <rect width="1000" height="32" y="35" rx="13" fill="url(#bamboo-rod)" />
-          <rect width="1000" height="32" y="68" rx="13" fill="url(#bamboo-rod)" />
-          <rect width="1000" height="32" y="101" rx="13" fill="url(#bamboo-rod)" />
-          <rect width="1000" height="32" y="134" rx="13" fill="url(#bamboo-rod)" />
+          <rect
+            width="1000"
+            height="32"
+            y="2"
+            rx="13"
+            fill="url(#bamboo-rod)"
+          />
+          <rect
+            width="1000"
+            height="32"
+            y="35"
+            rx="13"
+            fill="url(#bamboo-rod)"
+          />
+          <rect
+            width="1000"
+            height="32"
+            y="68"
+            rx="13"
+            fill="url(#bamboo-rod)"
+          />
+          <rect
+            width="1000"
+            height="32"
+            y="101"
+            rx="13"
+            fill="url(#bamboo-rod)"
+          />
+          <rect
+            width="1000"
+            height="32"
+            y="134"
+            rx="13"
+            fill="url(#bamboo-rod)"
+          />
           <g fill="none" stroke="#775834" strokeOpacity="0.29" strokeWidth="2">
             <path d="M208 3v30m5-30v30m371 2v30m5-30v30m-314 2v30m5-30v30m358 2v30m5-30v30m-451 2v30m5-30v30" />
           </g>
@@ -139,7 +169,13 @@ export default function PlaygroundBoard({
             strokeOpacity="0.1"
             strokeWidth="2.5"
           />
-          <path d="M52 122l42-5m105 53 30-4M203 17l47-3M82 287l35-4m172-116 28-3" fill="none" stroke="#3f4948" strokeOpacity="0.1" strokeWidth="2" />
+          <path
+            d="M52 122l42-5m105 53 30-4M203 17l47-3M82 287l35-4m172-116 28-3"
+            fill="none"
+            stroke="#3f4948"
+            strokeOpacity="0.1"
+            strokeWidth="2"
+          />
           <circle cx="87" cy="65" r="2" fill="#e2e1d9" fillOpacity="0.13" />
           <circle cx="247" cy="119" r="1.5" fill="#e2e1d9" fillOpacity="0.14" />
           <circle cx="321" cy="244" r="1.5" fill="#434b49" fillOpacity="0.12" />
@@ -186,8 +222,18 @@ export default function PlaygroundBoard({
         <g>
           <rect width="1000" height="1000" fill="url(#bamboo-base)" />
           <rect width="1000" height="1000" fill="url(#bamboo-planks)" />
-          <path d="M16 0v1000M984 0v1000" stroke="#714d31" strokeOpacity="0.27" strokeWidth="5" />
-          <path d="M22 0v1000M978 0v1000" stroke="#f2d7a7" strokeOpacity="0.35" strokeWidth="2" />
+          <path
+            d="M16 0v1000M984 0v1000"
+            stroke="#714d31"
+            strokeOpacity="0.27"
+            strokeWidth="5"
+          />
+          <path
+            d="M22 0v1000M978 0v1000"
+            stroke="#f2d7a7"
+            strokeOpacity="0.35"
+            strokeWidth="2"
+          />
         </g>
       )}
 
@@ -195,13 +241,45 @@ export default function PlaygroundBoard({
         <g>
           <rect width="1000" height="1000" fill="#d8d1c4" />
           <rect width="1000" height="1000" fill="#eeeae0" fillOpacity="0.28" />
-          <path d={slateEdge} transform={slateShadowTransform} fill="#263238" opacity="0.38" filter="url(#slate-shadow)" />
-          <path d={slateEdge} fill="#48504e" stroke="#38413f" strokeWidth="3" strokeLinejoin="round" />
-          <path d={slateEdge} transform={slateTopTransform} fill="url(#slate-face)" stroke="#aab0aa" strokeOpacity="0.24" strokeWidth="2" strokeLinejoin="round" />
+          <path
+            d={slateEdge}
+            transform={slateShadowTransform}
+            fill="#263238"
+            opacity="0.38"
+            filter="url(#slate-shadow)"
+          />
+          <path
+            d={slateEdge}
+            fill="#48504e"
+            stroke="#38413f"
+            strokeWidth="3"
+            strokeLinejoin="round"
+          />
+          <path
+            d={slateEdge}
+            transform={slateTopTransform}
+            fill="url(#slate-face)"
+            stroke="#aab0aa"
+            strokeOpacity="0.24"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
           <g clipPath="url(#slate-clip)">
             <rect width="1000" height="1000" fill="url(#slate-grain)" />
-            <path d="M75 397c111-19 184 8 272-5m46-2c124-21 245 7 391-9M76 554c121 9 196-14 314-3m66 5c138 12 252-16 455-2M132 708c82-14 141 8 214-7m185-10c106 8 188-8 305 3" fill="none" stroke="#e0e1da" strokeOpacity="0.11" strokeWidth="3" />
-            <path d="M118 465c74 4 126-9 192-6m401-28c48-2 90 2 143 5M189 668c52-4 91-2 139 3m366-15c52-3 93 1 142 3" fill="none" stroke="#424a48" strokeOpacity="0.1" strokeWidth="2" />
+            <path
+              d="M75 397c111-19 184 8 272-5m46-2c124-21 245 7 391-9M76 554c121 9 196-14 314-3m66 5c138 12 252-16 455-2M132 708c82-14 141 8 214-7m185-10c106 8 188-8 305 3"
+              fill="none"
+              stroke="#e0e1da"
+              strokeOpacity="0.11"
+              strokeWidth="3"
+            />
+            <path
+              d="M118 465c74 4 126-9 192-6m401-28c48-2 90 2 143 5M189 668c52-4 91-2 139 3m366-15c52-3 93 1 142 3"
+              fill="none"
+              stroke="#424a48"
+              strokeOpacity="0.1"
+              strokeWidth="2"
+            />
           </g>
         </g>
       )}
@@ -210,11 +288,38 @@ export default function PlaygroundBoard({
         <g>
           <rect width="1000" height="1000" fill="url(#go-wood)" />
           <rect width="1000" height="1000" fill="url(#go-grain)" />
-          <rect x="17" y="17" width="966" height="966" fill="none" stroke="#775333" strokeOpacity="0.65" strokeWidth="8" />
-          <rect x="29" y="29" width="942" height="942" fill="none" stroke="#efd39b" strokeOpacity="0.48" strokeWidth="2" />
+          <rect
+            x="17"
+            y="17"
+            width="966"
+            height="966"
+            fill="none"
+            stroke="#775333"
+            strokeOpacity="0.65"
+            strokeWidth="8"
+          />
+          <rect
+            x="29"
+            y="29"
+            width="942"
+            height="942"
+            fill="none"
+            stroke="#efd39b"
+            strokeOpacity="0.48"
+            strokeWidth="2"
+          />
           <GoGrid compact={material === "go9"} />
           {material === "go9" && (
-            <rect x="56" y="56" width="888" height="888" fill="none" stroke="#684a31" strokeOpacity="0.28" strokeWidth="2" />
+            <rect
+              x="56"
+              y="56"
+              width="888"
+              height="888"
+              fill="none"
+              stroke="#684a31"
+              strokeOpacity="0.28"
+              strokeWidth="2"
+            />
           )}
         </g>
       )}
@@ -222,24 +327,140 @@ export default function PlaygroundBoard({
       {material === "rice" && (
         <g>
           <rect width="1000" height="1000" fill="#ad9274" />
-          <rect x="20" y="20" width="960" height="960" rx="5" fill="#4f392f" opacity="0.28" filter="url(#paper-shadow)" />
+          <rect
+            x="20"
+            y="20"
+            width="960"
+            height="960"
+            rx="5"
+            fill="#4f392f"
+            opacity="0.28"
+            filter="url(#paper-shadow)"
+          />
           <rect x="18" y="18" width="964" height="964" rx="5" fill="#684a37" />
-          <rect x="26" y="42" width="948" height="916" fill="url(#rice-paper)" />
-          <rect x="26" y="42" width="948" height="916" fill="url(#rice-fibres)" />
-          <rect x="17" y="18" width="966" height="36" rx="18" fill="url(#scroll-roller)" />
-          <path d="M31 27h938M31 47h938" stroke="#d4af79" strokeOpacity="0.42" strokeWidth="2" />
+          <rect
+            x="26"
+            y="42"
+            width="948"
+            height="916"
+            fill="url(#rice-paper)"
+          />
+          <rect
+            x="26"
+            y="42"
+            width="948"
+            height="916"
+            fill="url(#rice-fibres)"
+          />
+          <rect
+            x="17"
+            y="18"
+            width="966"
+            height="36"
+            rx="18"
+            fill="url(#scroll-roller)"
+          />
+          <path
+            d="M31 27h938M31 47h938"
+            stroke="#d4af79"
+            strokeOpacity="0.42"
+            strokeWidth="2"
+          />
           <circle cx="30" cy="36" r="18" fill="#4a342d" />
           <circle cx="970" cy="36" r="18" fill="#4a342d" />
-          <rect x="17" y="946" width="966" height="36" rx="18" fill="url(#scroll-roller)" />
-          <path d="M31 955h938M31 975h938" stroke="#d4af79" strokeOpacity="0.38" strokeWidth="2" />
+          <rect
+            x="17"
+            y="946"
+            width="966"
+            height="36"
+            rx="18"
+            fill="url(#scroll-roller)"
+          />
+          <path
+            d="M31 955h938M31 975h938"
+            stroke="#d4af79"
+            strokeOpacity="0.38"
+            strokeWidth="2"
+          />
           <circle cx="30" cy="964" r="18" fill="#4a342d" />
           <circle cx="970" cy="964" r="18" fill="#4a342d" />
-          <g transform="translate(912 886)" fill="none" stroke="#a84439" strokeOpacity="0.2" strokeWidth="9">
+          <g
+            transform="translate(912 886)"
+            fill="none"
+            stroke="#a84439"
+            strokeOpacity="0.2"
+            strokeWidth="9"
+          >
             <circle r="28" />
             <path d="M-12-12h24v24h-24zM-4-12v24M4-12v24" />
           </g>
         </g>
       )}
+    </svg>
+  );
+}
+
+export function DiscoveryBoard({ cells }: { cells: 3 | 4 | 5 | 6 }) {
+  const positions = Array.from({ length: cells + 1 }, (_, index) =>
+    Number((60 + (880 * index) / cells).toFixed(2)),
+  );
+  return (
+    <svg
+      className="playground-board-art"
+      viewBox="0 0 1000 1000"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <linearGradient id="discovery-wood" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#ead09a" />
+          <stop offset="0.5" stopColor="#dcbd82" />
+          <stop offset="1" stopColor="#c99d62" />
+        </linearGradient>
+        <pattern
+          id="discovery-grain"
+          width="240"
+          height="180"
+          patternUnits="userSpaceOnUse"
+        >
+          <path
+            d="M0 28c66-10 130 8 240-3M-12 88c75 8 152-11 260-2M24 144c61-5 118 8 190-2"
+            fill="none"
+            stroke="#966c3f"
+            strokeOpacity="0.14"
+            strokeWidth="2"
+          />
+          <path
+            d="M42 55c45-5 84 4 133 0M80 112c34 3 75-4 105-1"
+            fill="none"
+            stroke="#fff0c7"
+            strokeOpacity="0.26"
+            strokeWidth="2"
+          />
+        </pattern>
+      </defs>
+      <rect width="1000" height="1000" fill="url(#discovery-wood)" />
+      <rect width="1000" height="1000" fill="url(#discovery-grain)" />
+      <rect
+        x="28"
+        y="28"
+        width="944"
+        height="944"
+        rx="22"
+        fill="none"
+        stroke="#9a7046"
+        strokeOpacity="0.42"
+        strokeWidth="7"
+      />
+      <g fill="none" stroke="#593d2c" strokeOpacity="0.74" strokeWidth="3">
+        {positions.map((position) => (
+          <g key={position}>
+            <path d={`M${position} 60 V940`} />
+            <path d={`M60 ${position} H940`} />
+          </g>
+        ))}
+      </g>
     </svg>
   );
 }

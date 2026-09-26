@@ -456,7 +456,7 @@ try {
   );
   assert.equal(
     await page
-      .getByRole("complementary", { name: "Playground controls" })
+      .getByRole("tabpanel", { name: "Playground" })
       .count(),
     1,
   );
@@ -1713,14 +1713,18 @@ try {
       ? point
       : farthest,
   );
-  const radialX = heartGrab.x - looseHeart.center.x;
-  const radialY = heartGrab.y - looseHeart.center.y;
-  const radialLength = Math.hypot(radialX, radialY) || 1;
-  const tangent = {
-    x: (-radialY / radialLength) * 8,
-    y: (radialX / radialLength) * 8,
+  const pullAwayFromXiang = {
+    x: away.x * 8,
+    y: away.y * 8,
   };
-  await drag(restoration, restorationBox, heartGrab, 12, tangent.x, tangent.y);
+  await drag(
+    restoration,
+    restorationBox,
+    heartGrab,
+    12,
+    pullAwayFromXiang.x,
+    pullAwayFromXiang.y,
+  );
   restoredState = await state(restoration);
   const pulledHeart = restoredState.characters.find(
     (object) => object.char === "心",

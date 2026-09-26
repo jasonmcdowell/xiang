@@ -379,6 +379,56 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Xiang project repository": "Xiang 專案儲存庫",
     "← Back to Xiang": "← 返回 Xiang",
     "← Back to play": "← 返回遊戲",
+    "Playground games": "遊樂場遊戲",
+    "Discovery Run": "發現之旅",
+    "Discovery Run controls": "發現之旅控制項",
+    "SURVIVAL GAME": "生存遊戲",
+    "Make room for discovery": "騰出空間，探索新字",
+    "A new character arrives every 10 seconds. Keep the board below its tile limit by tearing characters apart and recombining their pieces. The run ends when the board fills.":
+      "每 10 秒會出現一個新漢字。拆解漢字並重新組合部件，讓字牌數保持在上限以下。遊戲區填滿時，本回合結束。",
+    "Earn one point for each character delivered and one for every distinct character outside your collection that appears, even if you later recombine it.":
+      "每加入一個漢字可得一分；每發現一個不在所選字集中的不同漢字也可得一分，即使之後重新組合仍會保留紀錄。",
+    "Tile collection": "字牌字集",
+    "Playground collection": "遊樂場字集",
+    "HSK 1 Simplified": "HSK 1 簡體字",
+    "HSK 1 Traditional": "HSK 1 繁體字",
+    "Board size": "遊戲區大小",
+    "{count} spaces · {grid}×{grid}": "{count} 格 · {grid}×{grid}",
+    "Tiles are sized to fit the cells and snap into place when released.":
+      "字牌會縮放以符合格子，放開時會吸附到格位。",
+    "Start Discovery Run": "開始發現之旅",
+    "Preparing the board…": "正在準備遊戲區……",
+    "Choose a collection and board size, then start.":
+      "選擇字集和遊戲區大小，然後開始。",
+    "Discovery Run game board": "發現之旅遊戲區",
+    TILES: "字牌",
+    DISCOVERED: "新發現",
+    SURVIVED: "存活時間",
+    "Next character in {seconds}s": "下一個漢字將於 {seconds} 秒後到來",
+    "New tile in {seconds}s": "新字牌將於 {seconds} 秒後到來",
+    "{count} new characters": "{count} 個新漢字",
+    "RUN COMPLETE": "本回合結束",
+    "The board is full.": "遊戲區已滿。",
+    Score: "分數",
+    "Run again": "再玩一回合",
+    "CURRENT SCORE": "目前分數",
+    delivered: "已加入",
+    discoveries: "個新發現",
+    "Board capacity": "字牌上限",
+    "DISCOVERED CHARACTERS": "已發現的漢字",
+    "New characters discovered": "新發現的漢字",
+    "Pull apart a character to make your first discovery.":
+      "拆解漢字，尋找第一個新發現。",
+    "Pause and return to Playground": "暫停並返回物理遊樂場",
+    "Start with a character from a selected collection":
+      "從所選字集中的漢字開始",
+    "Switching to Playground pauses the arrival clock. Your run and score stay here when you return.":
+      "切換到物理遊樂場時，新字牌的倒數會暫停。返回後可繼續目前回合和分數。",
+    "Character strokes load as they are needed.": "漢字筆畫會在需要時載入。",
+    "A tile could not be loaded from this collection. The run is still going.":
+      "無法載入此字集中的字牌。本回合會繼續。",
+    "The run is on. A new character arrives every 10 seconds.":
+      "本回合開始。每 10 秒會出現一個新漢字。",
   },
   "zh-Hans": {
     "Main navigation": "主选单",
@@ -755,6 +805,54 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Xiang project repository": "Xiang 项目仓库",
     "← Back to Xiang": "← 返回 Xiang",
     "← Back to play": "← 返回游戏",
+    "Playground games": "游乐场游戏",
+    "Discovery Run": "发现之旅",
+    "Discovery Run controls": "发现之旅控制项",
+    "SURVIVAL GAME": "生存游戏",
+    "Make room for discovery": "腾出空间，探索新字",
+    "A new character arrives every 10 seconds. Keep the board below its tile limit by tearing characters apart and recombining their pieces. The run ends when the board fills.":
+      "每 10 秒会出现一个新汉字。拆解汉字并重新组合部件，让字牌数保持在上限以下。游戏区填满时，本回合结束。",
+    "Earn one point for each character delivered and one for every distinct character outside your collection that appears, even if you later recombine it.":
+      "每加入一个汉字可得一分；每发现一个不在所选字集中的不同汉字也可得一分，即使之后重新组合仍会保留记录。",
+    "Tile collection": "字牌字集",
+    "Playground collection": "游乐场字集",
+    "HSK 1 Simplified": "HSK 1 简体字",
+    "HSK 1 Traditional": "HSK 1 繁体字",
+    "Board size": "游戏区大小",
+    "{count} spaces · {grid}×{grid}": "{count} 格 · {grid}×{grid}",
+    "Tiles are sized to fit the cells and snap into place when released.":
+      "字牌会缩放以符合格子，放开时会吸附到格位。",
+    "Start Discovery Run": "开始发现之旅",
+    "Preparing the board…": "正在准备游戏区……",
+    "Choose a collection and board size, then start.":
+      "选择字集和游戏区大小，然后开始。",
+    "Discovery Run game board": "发现之旅游戏区",
+    TILES: "字牌",
+    DISCOVERED: "新发现",
+    SURVIVED: "存活时间",
+    "Next character in {seconds}s": "下一个汉字将在 {seconds} 秒后到来",
+    "New tile in {seconds}s": "新字牌将在 {seconds} 秒后到来",
+    "{count} new characters": "{count} 个新汉字",
+    "RUN COMPLETE": "本回合结束",
+    "The board is full.": "游戏区已满。",
+    Score: "分数",
+    "Run again": "再玩一回合",
+    "CURRENT SCORE": "当前分数",
+    delivered: "已加入",
+    discoveries: "个新发现",
+    "Board capacity": "字牌上限",
+    "DISCOVERED CHARACTERS": "已发现的汉字",
+    "New characters discovered": "新发现的汉字",
+    "Pull apart a character to make your first discovery.":
+      "拆解汉字，寻找第一个新发现。",
+    "Pause and return to Playground": "暂停并返回物理游乐场",
+    "Switching to Playground pauses the arrival clock. Your run and score stay here when you return.":
+      "切换到物理游乐场时，新字牌的倒计时会暂停。返回后可继续当前回合和分数。",
+    "Character strokes load as they are needed.": "汉字笔画会在需要时加载。",
+    "A tile could not be loaded from this collection. The run is still going.":
+      "无法加载此字集中的字牌。本回合会继续。",
+    "The run is on. A new character arrives every 10 seconds.":
+      "本回合开始。每 10 秒会出现一个新汉字。",
   },
 };
 

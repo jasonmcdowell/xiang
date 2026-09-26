@@ -19,7 +19,8 @@
     "test:motion": "node scripts/test-motion.mjs",
     "test:recipes": "node scripts/test-recipes.mjs",
     "test:drag": "node scripts/test-drag.mjs",
-    "test:playground": "node scripts/test-playground.mjs"
+    "test:playground": "node scripts/test-playground.mjs",
+    "test:discovery": "node scripts/test-discovery-run.mjs"
   },
   "dependencies": {
     "next": "^16.3.4",

@@ -506,3 +506,11 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** The pop makes a successful physical separation clear, while players should be able to choose a quieter experience.
 
 **Consequences:** The checkbox controls only tear feedback for the current Playground visit and does not affect pointer handling or other interface sounds.
+
+## D-058 — Add Discovery Run as a separate Playground game
+
+**Decision (2026-09-26):** Add a second Playground tab named **Discovery Run**. It starts with one random drawable character from a selected collection (Playground starters, HSK 1 Simplified, or HSK 1 Traditional), then adds another collection character every 10 seconds. The player chooses a 3×3, 4×4, 5×5, or 6×6 cell board, which sets both capacity and tile size. Tiles occupy cell centers on a square Go-inspired board and snap to those cells. Reaching capacity ends the run. Track arrivals and distinct characters outside the selected draw collection that appear on the board; discoveries remain counted after later recombination. Score is arrivals plus unique discoveries. The timer advances only while this tab is active. Keep the existing free-form Playground as its own persistent tab and scene.
+
+**Why:** This adds an endurance game loop that rewards continued decomposition and recombination while preserving the physics lab's open-ended use. Counting discovered characters historically makes exploration valuable even if a player later recombines those pieces.
+
+**Consequences:** Discovery Run state is session-only. Its board layout, draw collection, and score are independent of the Playground controls and board material. The draw collection determines whether a character is a discovery; all character rules and physical assets remain dynamically loaded from the existing local static data. If no valid character fits a required asset load, the arrival is retried without counting a tile.
