@@ -1,11 +1,5 @@
 import { STEP, WobbleBody, type Point } from "./wobble";
-import {
-  componentLayout,
-  connectAtSeam,
-  coupleComponents,
-  type ComponentLayout,
-  type Tether,
-} from "./wobbleComponents";
+import { componentLayout, type ComponentLayout } from "./wobbleComponents";
 import {
   facingBinding,
   hitInk,
@@ -22,6 +16,7 @@ import {
 } from "./wobbleDrawing";
 
 export type PhysicsMode = "fixed" | "weighted";
+export type ArrangeMode = "one-by-one" | "all-at-once" | "by-component";
 export type PlaygroundAssets = {
   glyphs: Record<string, string[]>;
   recipes: {
@@ -80,7 +75,6 @@ type TearPreview = {
   partBody: WobbleBody;
   restInk: Ink;
   partInk: Ink;
-  tethers: Tether[];
 };
 type MagnetMatch = {
   recipe: Recipe;
@@ -115,12 +109,23 @@ type TearPlan = {
     ready: boolean;
   };
 };
+type TileMove = {
+  object: SceneObject;
+  fromInk: ReturnType<WobbleBody["pose"]>;
+  fromTile: ReturnType<WobbleBody["pose"]>;
+  target: Point;
+  delay: number;
+  duration: number;
+};
 
 const clamp = (value: number, low: number, high: number) =>
   Math.max(low, Math.min(high, value));
 const TILE_FACE_INSET = 38;
 const TILE_FACE_SIZE = 156;
 const TILE_CLEARANCE = 10;
+const GRID_GAP = 30;
+const GRID_MARGIN = 12;
+const GRID_PITCH = TILE_FACE_SIZE + GRID_GAP;
 const DEFAULT_GLYPH_SCALE = 0.36;
 const TILE_OVERLAP_EPSILON = 0.01;
 const MAGNET_FULL_ALIGNMENT_DISTANCE = TILE_FACE_SIZE + TILE_CLEARANCE * 3;
@@ -139,6 +144,7 @@ export class PlaygroundWorld {
   private customStarts: StartingTile[] | null = null;
   private preview: TearPreview | null = null;
   private contacts = new Map<number, Contact>();
+  private tileAnimation: { elapsed: number; moves: TileMove[] } | null = null;
   private events: PlaygroundWorldEvent[] = [];
   private nextId = 1;
   private elapsed = 0;
@@ -152,6 +158,7 @@ export class PlaygroundWorld {
   tileRepulsion = true;
   softness = 0.55;
   reduced = false;
+  snapToGrid = false;
 
   constructor(
     private width: number,
@@ -265,6 +272,14 @@ export class PlaygroundWorld {
     return this.objects.length;
   }
 
+  get isAnimatingTiles() {
+    return this.tileAnimation !== null;
+  }
+
+  get isManipulating() {
+    return this.contacts.size > 0 || !!this.preview;
+  }
+
   private allBodies() {
     const bodies = this.objects.flatMap((object) => [
       object.body,
@@ -340,6 +355,8 @@ export class PlaygroundWorld {
     if (this.preview) {
       this.setBodyMode(this.preview.restBody, false);
       this.setBodyMode(this.preview.partBody, true);
+      this.preview.restBody.setVelocity(0, 0);
+      this.preview.restBody.setFixed(true);
     }
   }
 
@@ -351,6 +368,189 @@ export class PlaygroundWorld {
 
   setTileRepulsion(enabled: boolean) {
     this.tileRepulsion = enabled;
+  }
+
+  setSnapToGrid(enabled: boolean) {
+    this.snapToGrid = enabled;
+  }
+
+  compatibleTileIds(id: number | null) {
+    if (id === null) return [];
+    const selected = this.objects.find((object) => object.id === id);
+    if (!selected?.free) return [];
+    const index = this.assets.compositionParents ?? {};
+    return this.objects
+      .filter((object) => {
+        if (object.id === selected.id || !object.free) return false;
+        return (
+          (index[compositionKey(selected.char, object.char)] ?? []).length > 0
+        );
+      })
+      .map((object) => object.id);
+  }
+
+  arrangeTiles(mode: ArrangeMode) {
+    if (this.contacts.size || this.preview || this.tileAnimation) return false;
+    if (!this.objects.length) return false;
+    const ordered =
+      mode === "by-component"
+        ? this.orderBySharedComponents()
+        : [...this.objects];
+    const slots = this.gridCenters(ordered.length);
+    const duration = mode === "all-at-once" ? 0.58 : 0.26;
+    const delay = mode === "one-by-one" ? duration + 0.04 : 0.09;
+    const moves = ordered.map((object, index) => ({
+      object,
+      fromInk: object.body.pose(),
+      fromTile: object.surfaceBody.pose(),
+      target: slots[index],
+      delay: mode === "all-at-once" ? 0 : index * delay,
+      duration,
+    }));
+    if (this.reduced) {
+      for (const move of moves) this.applyTilePose(move, 1);
+      return true;
+    }
+    this.tileAnimation = { elapsed: 0, moves };
+    return true;
+  }
+
+  private orderBySharedComponents() {
+    const remaining = [...this.objects];
+    const partsOf = (object: SceneObject) =>
+      new Set(object.recipe?.parts.map((part) => part.char) ?? []);
+    const sharedCount = (a: SceneObject, b: SceneObject) => {
+      const first = partsOf(a);
+      return [...partsOf(b)].filter((part) => first.has(part)).length;
+    };
+    const componentDegree = (object: SceneObject) =>
+      remaining.reduce(
+        (sum, candidate) =>
+          sum + (candidate === object ? 0 : sharedCount(object, candidate)),
+        0,
+      );
+    const ordered: SceneObject[] = [];
+    let previous: SceneObject | null = null;
+    const compareCharacters = (a: SceneObject, b: SceneObject) =>
+      a.char < b.char ? -1 : a.char > b.char ? 1 : a.id - b.id;
+    while (remaining.length) {
+      let next: SceneObject;
+      if (previous) {
+        const candidates = remaining
+          .map((object) => ({ object, shared: sharedCount(previous!, object) }))
+          .sort(
+            (a, b) =>
+              b.shared - a.shared || compareCharacters(a.object, b.object),
+          );
+        if (candidates[0]?.shared) next = candidates[0].object;
+        else
+          next = [...remaining].sort(
+            (a, b) =>
+              componentDegree(b) - componentDegree(a) ||
+              compareCharacters(a, b),
+          )[0];
+      } else
+        next = [...remaining].sort(
+          (a, b) =>
+            componentDegree(b) - componentDegree(a) || compareCharacters(a, b),
+        )[0];
+      remaining.splice(remaining.indexOf(next), 1);
+      ordered.push(next);
+      previous = next;
+    }
+    return ordered;
+  }
+
+  private gridCenters(count: number): Point[] {
+    if (!count) return [];
+    const maxColumns = Math.max(
+      1,
+      Math.floor((this.width - GRID_MARGIN * 2 + GRID_GAP) / GRID_PITCH),
+    );
+    const columns = Math.min(maxColumns, count);
+    const rows = Math.ceil(count / columns);
+    const availableX = Math.max(
+      0,
+      this.width - TILE_FACE_SIZE - GRID_MARGIN * 2,
+    );
+    const availableY = Math.max(
+      0,
+      this.height - TILE_FACE_SIZE - GRID_MARGIN * 2,
+    );
+    const pitchX =
+      columns > 1 ? Math.min(GRID_PITCH, availableX / (columns - 1)) : 0;
+    const pitchY = rows > 1 ? Math.min(GRID_PITCH, availableY / (rows - 1)) : 0;
+    return Array.from({ length: count }, (_, index) => ({
+      x: GRID_MARGIN + TILE_FACE_SIZE / 2 + (index % columns) * pitchX,
+      y:
+        GRID_MARGIN + TILE_FACE_SIZE / 2 + Math.floor(index / columns) * pitchY,
+    }));
+  }
+
+  private applyTilePose(move: TileMove, progress: number) {
+    const eased = progress * progress * (3 - 2 * progress);
+    const poseAt = (from: ReturnType<WobbleBody["pose"]>) => ({
+      x: from.x + (move.target.x - from.x) * eased,
+      y: from.y + (move.target.y - from.y) * eased,
+      angle: from.angle * (1 - eased),
+    });
+    move.object.body.setPose(poseAt(move.fromInk));
+    move.object.surfaceBody.setPose(poseAt(move.fromTile));
+  }
+
+  private advanceTileAnimation(dt: number) {
+    const animation = this.tileAnimation;
+    if (!animation) return false;
+    animation.elapsed += dt;
+    let complete = true;
+    for (const move of animation.moves) {
+      const progress = clamp(
+        (animation.elapsed - move.delay) / move.duration,
+        0,
+        1,
+      );
+      this.applyTilePose(move, progress);
+      if (progress < 1) complete = false;
+    }
+    if (!complete) return false;
+    this.tileAnimation = null;
+    return true;
+  }
+
+  private snapTileToGrid(id: number) {
+    const object = this.objects.find((candidate) => candidate.id === id);
+    if (!object) return;
+    const slots = this.gridCenters(this.objects.length + 1);
+    const face = this.tileDimensions(object.surfaceBody);
+    const open = slots.filter((center) =>
+      this.objects
+        .filter((candidate) => candidate !== object)
+        .every((candidate) =>
+          this.facesClear(
+            center,
+            face,
+            candidate.surfaceBody.pose(),
+            this.tileFootprint(candidate.surfaceBody),
+          ),
+        ),
+    );
+    const from = object.surfaceBody.pose();
+    const candidates = open.length ? open : slots;
+    const target = candidates.reduce((best, candidate) =>
+      Math.hypot(candidate.x - from.x, candidate.y - from.y) <
+      Math.hypot(best.x - from.x, best.y - from.y)
+        ? candidate
+        : best,
+    );
+    const move: TileMove = {
+      object,
+      fromInk: object.body.pose(),
+      fromTile: from,
+      target,
+      delay: 0,
+      duration: this.reduced ? 0.001 : 0.34,
+    };
+    this.tileAnimation = { elapsed: 0, moves: [move] };
   }
 
   takeEvents() {
@@ -398,6 +598,10 @@ export class PlaygroundWorld {
   setReducedMotion(reduced: boolean) {
     this.reduced = reduced;
     for (const body of this.allBodies()) body.reduced = reduced;
+    if (reduced && this.tileAnimation) {
+      for (const move of this.tileAnimation.moves) this.applyTilePose(move, 1);
+      this.tileAnimation = null;
+    }
   }
 
   reset(char?: string) {
@@ -439,7 +643,7 @@ export class PlaygroundWorld {
   }
 
   addCharacter(char: string): "added" | "busy" | "full" {
-    if (this.contacts.size || this.preview) {
+    if (this.contacts.size || this.preview || this.tileAnimation) {
       this.message = "Finish the current drag before adding a character.";
       return "busy";
     }
@@ -470,7 +674,7 @@ export class PlaygroundWorld {
   unfoldTile(
     id: number,
   ): "unfolded" | "busy" | "missing" | "unsupported" | "no-room" {
-    if (this.contacts.size || this.preview) {
+    if (this.contacts.size || this.preview || this.tileAnimation) {
       this.message = "Finish the current drag before unfolding a tile.";
       return "busy";
     }
@@ -665,6 +869,11 @@ export class PlaygroundWorld {
     const partBody = object.body.copy();
     this.setBodyMode(restBody, false);
     this.setBodyMode(partBody, true);
+    // The remainder stays anchored to its original tile while the pulled
+    // component moves independently. Only the dragged part should react to
+    // this gesture.
+    restBody.setVelocity(0, 0);
+    restBody.setFixed(true);
     const restInk = skinStrokes(
       restIndices.map((index) => object.recipe!.strokes[index]),
       restBody,
@@ -677,18 +886,17 @@ export class PlaygroundWorld {
       partBody,
       restInk,
       partInk,
-      tethers: connectAtSeam(restInk, partInk, restBody, partBody),
     };
     this.preview = preview;
     this.setPhase(
       "stretching",
-      `Pull ${part.char} away. The rest of ${object.char} resists and gives a little.`,
+      `Pull ${part.char} away. The rest stays in place.`,
     );
     return preview;
   }
 
   pointerDown(point: Point, pointerId: number) {
-    if (this.contacts.has(pointerId)) return false;
+    if (this.contacts.has(pointerId) || this.tileAnimation) return false;
     let body: WobbleBody | null = null;
     let surfaceBody: WobbleBody | null = null;
     let entityId = -1;
@@ -733,13 +941,9 @@ export class PlaygroundWorld {
           this.visualStyle !== "flat" &&
           hitTileFace(point, object.surfaceBody, this.visualStyle);
         if (!onInk && !onTile) continue;
-        // If no reviewed tear recipe exists, an ink drag cannot detach a
-        // component. In raised/draped modes let that gesture move the whole
-        // tile instead of only stretching the strokes and snapping them back.
-        if (
-          onTile &&
-          (!onInk || (!object.recipe && !object.componentPiece))
-        ) {
+        // Unsupported ink cannot tear, so let its visible strokes grab the
+        // whole tile even when projection carries them beyond the tile face.
+        if ((onInk && !object.recipe) || (onTile && !onInk)) {
           body = object.body;
           entityId = object.id;
           tileGrip = true;
@@ -851,6 +1055,18 @@ export class PlaygroundWorld {
         (other) => other.entityId === this.preview!.source.id,
       );
       if (!remaining) this.rollbackTear();
+    } else {
+      const releasedObject = this.objects.find(
+        (object) => object.id === contact.entityId,
+      );
+      const releasedTileFollowsInk =
+        !contact.tileGrip && releasedObject?.tileFollowsInkUntilRelease;
+      if (
+        this.snapToGrid &&
+        (contact.tileGrip || releasedTileFollowsInk) &&
+        !this.findMagnet()
+      )
+        this.snapTileToGrid(contact.entityId);
     }
   }
 
@@ -873,6 +1089,7 @@ export class PlaygroundWorld {
   }
 
   cancelAll() {
+    this.tileAnimation = null;
     for (const [pointerId, contact] of this.contacts)
       if (contact.tileGrip) contact.surfaceBody.releaseWhole(pointerId);
       else contact.body.release(pointerId);
@@ -885,6 +1102,7 @@ export class PlaygroundWorld {
   }
 
   nudge(x = 1, y = 0) {
+    if (this.tileAnimation) return;
     if (this.preview) {
       this.preview.restBody.nudge(x, y);
       this.preview.partBody.nudge(x, y);
@@ -1046,9 +1264,7 @@ export class PlaygroundWorld {
         for (let y = -ring; y <= ring; y++)
           if (Math.max(Math.abs(x), Math.abs(y)) === ring)
             offsets.push({ x: x * step, y: y * step });
-    offsets.sort(
-      (a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y),
-    );
+    offsets.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
 
     for (const offset of offsets) {
       const centers = splitCenters.map((center) => ({
@@ -1114,20 +1330,9 @@ export class PlaygroundWorld {
         center.y >= tileFace.height / 2 &&
         center.y <= this.height - tileFace.height / 2,
     );
-    let ready =
+    const ready =
       this.facesClear(first.center, first.face, second.center, second.face) &&
       withinBoard;
-    const existing = this.objects.filter((object) => object !== source);
-    for (const placement of placements)
-      for (const object of existing)
-        ready =
-          ready &&
-          this.facesClear(
-            placement.center,
-            placement.face,
-            object.surfaceBody.pose(),
-            this.tileFootprint(object.surfaceBody),
-          );
     return {
       placements,
       clearance: {
@@ -1349,8 +1554,7 @@ export class PlaygroundWorld {
         const gapY =
           (footprintA.height + footprintB.height) / 2 -
           Math.abs(positionB.y - positionA.y);
-        const penetration =
-          Math.min(gapX, gapY) + TILE_REPULSION_RANGE;
+        const penetration = Math.min(gapX, gapY) + TILE_REPULSION_RANGE;
         if (penetration <= 0) continue;
 
         let dx = positionB.x - positionA.x;
@@ -1367,9 +1571,7 @@ export class PlaygroundWorld {
           ((magneticPair.a === a && magneticPair.b === b) ||
             (magneticPair.a === b && magneticPair.b === a));
         const force =
-          TILE_REPULSION_FORCE *
-          progress ** 2 *
-          (compatible ? 0.15 : 1);
+          TILE_REPULSION_FORCE * progress ** 2 * (compatible ? 0.15 : 1);
         const direction = { x: dx / distance, y: dy / distance };
         const movableA = !a.surfaceBody.fixed && !directlyHeld.has(a.id);
         const movableB = !b.surfaceBody.fixed && !directlyHeld.has(b.id);
@@ -1518,29 +1720,18 @@ export class PlaygroundWorld {
   }
 
   step(dt = STEP): boolean {
+    if (this.tileAnimation) return this.advanceTileAnimation(dt);
     if (this.preview) {
       this.preview.restBody.step(dt);
       this.preview.partBody.step(dt);
-      const stretched = coupleComponents(
-        this.preview.restBody,
-        this.preview.partBody,
-        this.preview.tethers,
-        dt,
-      );
-      if (stretched) {
-        const plan = this.planTear(this.preview);
-        if (plan.clearance.ready) {
-          this.commitTear(plan);
-          return true;
-        }
-        this.message = plan.clearance.withinBoard
-          ? "Keep pulling until the tile faces have room."
-          : "Guide both pieces back inside the board before they separate.";
-      } else {
-        const part =
-          this.preview.source.recipe!.parts[this.preview.partIndex].char;
-        this.message = `Pull ${part} away. The rest resists and gives a little.`;
+      const plan = this.planTear(this.preview);
+      if (plan.clearance.ready) {
+        this.commitTear(plan);
+        return true;
       }
+      this.message = plan.clearance.withinBoard
+        ? "Keep pulling until the component clears its source tile."
+        : "Guide the pulled component back inside the board before it separates.";
       return false;
     }
     const magneticPair = this.findMagnet();
@@ -1628,6 +1819,7 @@ export class PlaygroundWorld {
             body: object.body,
             surfaceBody: object.surfaceBody,
             character: object.char,
+            objectId: object.id,
           },
         ];
 
@@ -1639,12 +1831,14 @@ export class PlaygroundWorld {
           body: preview.restBody,
           surfaceBody: object.surfaceBody,
           character: parts[restIndex].char,
+          objectId: object.id,
         },
         {
           ink: preview.partInk,
           body: preview.partBody,
           surfaceBody: object.surfaceBody,
           character: parts[preview.partIndex].char,
+          objectId: object.id,
         },
       ];
     });
@@ -1653,7 +1847,7 @@ export class PlaygroundWorld {
   connections() {
     return this.preview
       ? {
-          tethers: this.preview.tethers,
+          tethers: [],
           parent: this.preview.restBody,
           part: this.preview.partBody,
         }
@@ -1717,6 +1911,9 @@ export class PlaygroundWorld {
       physicsMode: this.physicsMode,
       visualStyle: this.visualStyle,
       tileRepulsion: this.tileRepulsion,
+      snapToGrid: this.snapToGrid,
+      animatingTiles: this.isAnimatingTiles,
+      manipulating: this.isManipulating,
       boardPreset: this.boardPreset,
       phase: this.phase,
       message: this.message,
@@ -1770,7 +1967,13 @@ export class PlaygroundWorld {
             parent: this.preview.source.char,
             part: this.preview.source.recipe!.parts[this.preview.partIndex]
               .char,
-            tetherCount: this.preview.tethers.length,
+            tetherCount: 0,
+            restCenter: this.preview.restBody.pose(),
+            restInkCenter: inkCenter(
+              this.preview.restInk,
+              this.preview.restBody,
+            ),
+            sourceTileCenter: this.preview.source.surfaceBody.pose(),
             readyForTiles: tearPlan?.clearance.ready ?? false,
             tileClearance: tearPlan?.clearance ?? null,
           }

@@ -89,11 +89,13 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Build and refresh production preview.
 
 ## Follow-up — Drag to combine
+
 - [x] Add mouse/pen dragging and a touch grip, valid/invalid target feedback, and selected-pair dragging for triples.
 - [x] Reuse composition, chooser, animation, undo, and challenge rules.
 - [x] Verify cancellation, click suppression, native touch gestures, desktop/mobile visuals, and existing browser behavior.
 
 ## Follow-up — Single-character physical playground
+
 - [x] Extract one attributed stroke asset without committing raw graphics.
 - [x] Render untiled 想 with elastic deformation, grabbing-point attachment, inertia, damping, and bounds.
 - [x] Add mouse/touch input, softness, reset/nudge, keyboard/fullscreen, reduced motion, and safe cancellation.
@@ -101,6 +103,7 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Add a route and game navigation link; validate the existing game and production build.
 
 ## Follow-up — Multitouch component pulling
+
 - [x] Derive the complete 相 + 心 stroke groups for 想 from Make Me a Hanzi matches.
 - [x] Hold the two ink layers together with compliant seam links; let a sustained pull release one component.
 - [x] Track each Pointer Events ID independently with no hard-coded finger limit; contacts on one component share its body.
@@ -109,6 +112,7 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [ ] Physical Safari testing on the user's iPhone/iPad to measure how many contacts that device reports and tune the pull feel.
 
 ## Follow-up — Physical tearing and magnetic assembly
+
 - [x] Derive five complete playground recipes from Make Me a Hanzi: 想, 相, 明, 休, 好.
 - [x] Pull a mapped child free with one contact, retain its sibling, and allow a detached composite to be torn again.
 - [x] Add fixed-centroid and weighted-parent modes; detached children remain easier to move.
@@ -119,28 +123,34 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [ ] Physical Safari testing of tearing and magnetic feel on the user's iPhone/iPad.
 
 ## Follow-up — 2.5D tile and stroke materials
+
 - [x] Compare Flat, Raised, Draped, and Silk pseudo-3D rendering on the playground's reviewed characters.
 - [x] Verify visible ink hit-testing while raised, draped over the tile edge, and dropped to the table in Silk mode.
 - [x] Make bare tile face a whole-character grip in tile styles; preserve Fixed anchoring and weighted movement.
 - [ ] Tune bevel depth, stroke relief, and ground shadow from desktop and phone playtests before considering actual 3D rendering.
 
 ## Follow-up — Smaller tiles and independent ink pulls
+
 - [x] Give all playground characters equal 184 × 184 CSS-pixel tile faces so more pieces fit on the board.
 - [x] Keep the rigid tile surface stationary during ink pulls and ink inertia; move it only from a bare-face grip.
 - [x] In Weighted mode, translate the ink with a dragged tile while preserving its shape; Fixed mode keeps its anchor.
 - [x] Verify equal dimensions after tears, stationary faces in both physics modes, and whole-tile movement from the face.
 
 ## Follow-up — Released ink returns to its tile
+
 - [x] Add a damped center-and-angle spring from released ink to its own tile transform.
 - [x] Pause the return while a character is held or a compatible pair is inside the magnetic field; keep Fixed and reduced-motion behavior stable.
 - [x] Verify that non-combining ink returns without moving its tile, and that magnetic reassembly still works.
 
-## Follow-up — Tile clearance and reliable reassembly
-- [x] Keep the character in a tear preview until new tile faces have visible clearance from each other and every existing tile.
+## Follow-up — Tear separation and reliable reassembly
+
+- [x] Create child tiles once they clear each other and fit within the board; unrelated existing tiles do not delay a tear.
+- [x] Keep the original tile and the unpulled component stationary throughout a tear; the new tile follows the dragged ink until release.
 - [x] Keep separated 相 + 心 within a gentle capture range and verify they can snap into 想 from a direct tile drag.
-- [x] Verify no-overlap tear geometry for nested and direct tears in browser tests.
+- [x] Verify separated sibling faces and allow unrelated tile overlap in nested and direct tear browser tests.
 
 ## Follow-up — Dynamic physical character data
+
 - [x] Generate a paths-free catalog and one codepoint-keyed outline and recipe asset per eligible character.
 - [x] Fetch only visible glyphs, their immediate tear mappings, and compatible parent assets when pieces reach contact.
 - [x] Keep the main game's compact decomposition/composition indices eagerly loaded; do not fetch them per move.
@@ -154,3 +164,17 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Add an accessible selector below the canvas and translate every option into Traditional and Simplified Chinese.
 - [x] Preserve physics interaction and character surface styling independently from the board material.
 - [x] Document the new Playground options and Bamboo table initial selection.
+
+## Follow-up — Whole-tile ink grip for unsupported characters
+
+- [x] When no supported tear recipe exists, dragging any ink moves the tile and ink together in Flat, Raised, Draped, and Silk styles.
+- [x] Preserve mapped component pulls and verify terminal detached pieces such as 人 stay attached to their tile while dragged by ink.
+
+## Follow-up — Arrange, snap, and hint in the Playground
+
+- [x] Animate row-major top-left grid arrangement one tile at a time or all at once.
+- [x] Offer shared-immediate-component ordering before arrangement.
+- [x] Add optional nearest-open-cell snapping for released whole tiles and newly detached pieces; preserve active compatible compositions.
+- [x] Let the focused loose tile highlight all compatible loose tiles; clear hints when focus changes.
+- [x] Add Traditional and Simplified Chinese labels and reduced-motion handling.
+- [x] Verify grid order, animation sequencing, shared 木 grouping, snap placement, and 想 → 相 + 心 hint highlighting in the browser suite.

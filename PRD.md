@@ -22,6 +22,7 @@ This is both a learning tool and a puzzle game, inspired by Scrabble/Rummikub �
 ## 2) Scope overview
 
 ### MVP (Phase 1)
+
 - Web app (Next.js + TypeScript) statically exported to **GitHub Pages**
 - Uses **Make Me a Hanzi `dictionary.txt`** as build-time source
 - Build-time preprocessing generates **static indices** served from `public/data/**`
@@ -32,26 +33,31 @@ This is both a learning tool and a puzzle game, inspired by Scrabble/Rummikub �
 - **Tiles are rendered using fonts** (stroke rendering is Phase 2)
 
 ### Phase 2+
+
 - Use **hanzi-writer-data** CDN to lazily load stroke data for better visuals/animations/highlighting
 - Add operator-aware composition (⿰, ⿱, etc.) and/or drag semantics
 - Hidden Message mode (puzzle generator)
 - Tile/Board mode (adjacency + morphing rules)
 
 ### First physical experiment (2026-09-22)
+
 - Separate `/playground` page showing one untiled 想 using its stroke outlines.
 - Grab and drag the ink; deformation and inertia remain visible when the pointer stops, then settle on release.
 - Mouse/touch support, a softness control, reset/nudge controls, keyboard support, and reduced motion.
 - The initial character-only demo used one untiled 想 to validate elastic dragging. The current component-tearing experiment is described below.
 
 ### Playground extensions (2026-09-22)
+
 - The playground now supports a small reviewed set of component tears and relative-layout magnetic assembly. These remain an isolated experiment, separate from the primary game's rules.
 - A Flat/Raised/Draped/Silk surface-style selector compares plain ink, raised strokes, edge-draped ink, and a taller pseudo-3D tile whose floppy ink drops to the table and rises across other tile tops.
-- Raised and Draped characters use equal 184 × 184 CSS-pixel tile faces. Ink pulls leave the face anchored; only a bare-face drag targets the tile, with whole-character movement available in Weighted mode.
+- Raised, Draped, and Silk characters use equal-size tile faces. Ink with a supported tear recipe can be pulled separately while its tile stays anchored; when no supported tear recipe exists, its ink itself grabs and moves the tile with it. A blank-face drag also moves the whole character in Weighted mode, while Fixed keeps its anchor.
 - After release, ink drifts back to its own tile's center and orientation unless a compatible pair is being magnetically aligned; this return never moves the tile or automatically recombines characters.
-- In Raised and Draped styles, a component becomes a new tile only after the seam is stretched and its planned 184 × 184 face clears its sibling and all existing faces by at least 12 CSS pixels; compatible pieces remain catchable by the gentle magnetic field after separation.
+- A mapped component becomes a new tile as soon as its planned face clears the stationary remainder's tile and both faces fit on the board. Nearby unrelated tiles do not delay the split and may overlap temporarily. The remaining strokes stay anchored during the pull; the new tile follows the dragged strokes until release.
 - The phone-sized playground board stays tall enough to pull two tiles apart vertically without clipping either new face.
 - Keep this visual experiment 2D and client-side. It should not delay or change the core Explore and Timed Challenge experience.
 - A board-material selector below the playground canvas compares a bamboo tabletop, one rough-edged slate slab, a full 19×19 wooden Go board, a compact 9×9 Go board, and a rice-paper scroll. Board materials remain independent of the character surface selector and physics.
+- **Arrange tiles** animates the scene into a top-left, row-major grid. Players can preserve the current tile order and move one by one or all at once, or sort by shared immediate decomposition components before arranging. Optional **Snap to grid when released** finds the closest unoccupied cell for a dragged whole tile or a newly torn-off tile; if an eligible composition is already engaging, composition takes priority over snapping.
+- A focused loose tile can highlight every other loose tile that forms a supported composition with it. Hints reveal the compatible set without identifying a single pairing, and changing focus clears the highlights.
 
 ---
 
@@ -73,14 +79,17 @@ This is both a learning tool and a puzzle game, inspired by Scrabble/Rummikub �
 ## 5) Data strategy (critical engineering plan)
 
 ### Intent
+
 Gameplay must feel instant. We should not call an API on each move. Make Me a Hanzi data is large; serverless bundle limits and latency make per-move APIs undesirable.
 
 ### Decision (MVP)
+
 - Preprocess Make Me a Hanzi `dictionary.txt` into compact indices at build/dev time.
 - Serve indices as **static files** via Next.js `public/data/**`.
 - Keep all decompose/compose validation **client-side** using those indices.
 
 ### Phase 2 (visuals)
+
 - Use **hanzi-writer-data CDN** to fetch per-character stroke JSON lazily when needed.
 - MVP does not depend on strokes.
 
@@ -89,6 +98,7 @@ Gameplay must feel instant. We should not call an API on each move. Make Me a Ha
 ## 6) Game rules appendix (MVP rules are explicit)
 
 ### 6.1 Tile validity and normalization
+
 - All tiles shown to players are **valid standard Unicode characters** (Hanzi).
 - Component variants are normalized to canonical character tiles:
   - Example: 忄 is displayed/treated as 心
@@ -96,6 +106,7 @@ Gameplay must feel instant. We should not call an API on each move. Make Me a Ha
 - MVP uses a small curated `variantMap`. Phase 2 may display component forms visually while keeping canonical identity for rules.
 
 ### 6.2 Decompose operation (MVP)
+
 - Action: player **clicks** a character tile on the board.
 - If the character has a usable one-level decomposition into **2+ valid child characters**:
   - Remove the parent from the board and add all immediate children to the component tray
@@ -106,6 +117,7 @@ Gameplay must feel instant. We should not call an API on each move. Make Me a Ha
 **Example:** 想 -> 相 + 心
 
 ### 6.3 Compose operation (operator-free)
+
 The dataset is decomposition-first. For MVP composition we use reverse lookup:
 
 - Player selects **two or three component tiles** in the tray and activates Combine. Native buttons support mouse, touch, and keyboard.
@@ -113,13 +125,15 @@ The dataset is decomposition-first. For MVP composition we use reverse lookup:
 - Outcomes:
   - 0 results: invalid (reject/bounce)
   - 1 result: compose succeeds, creating that character tile on the board
-  - >1 results: show a small chooser UI; player selects which character to create
+  - > 1 results: show a small chooser UI; player selects which character to create
 
 **Consumption rule (MVP):**
+
 - Input component tiles are **consumed** when composing.
 - Resulting character tile appears on the **board** and stays until decomposed.
 
 ### 6.4 Ambiguity policy (MVP)
+
 - If multiple result characters are possible, show all candidates in a scrollable chooser, with pinyin and definitions, in deterministic code-point order.
 - Cancel preserves both inputs. The challenge clock keeps running while choosing.
 
@@ -128,9 +142,11 @@ The dataset is decomposition-first. For MVP composition we use reverse lookup:
 ## 7) Modes
 
 ### 7.1 Mode A (MVP): Timed Challenge
+
 Goal: build characters quickly without letting the tray overflow.
 
 **Rules**
+
 - Start timer: 60 seconds
 - Start tray: N=8 random component tiles from a curated pool
 - Tray capacity: C=12
@@ -144,22 +160,26 @@ Goal: build characters quickly without letting the tray overflow.
   - timer reaches 0 OR tray exceeds capacity (overflow)
 
 **Scoring**
+
 - +1 per successful composition
 - +1 bonus for creating a character not yet created this run
 - Phase 2+: use stroke count, frequency/rarity, streaks, etc.
 
 **Component pool selection**
+
 - Precompute component frequency from one-level decompositions (normalized children)
 - Challenge starts with the shuffled children of four curated, valid two-child recipes to guarantee initial moves. Incoming components are weighted by square-root frequency within this curated pool, preferring characters that pair with the current tray.
 - Explicit pause and hiding the tab freeze both clocks. At simultaneous timeout and arrival, timeout wins. Splitting can cause overflow.
 - Every successful recomposition earns the base reward; the discovery bonus is awarded only once per character per run.
 
 ### 7.2 Explore (MVP) and Hidden Message (deferred)
+
 - Explore provides an untimed board and tray, five curated sample sets, single-character lookup/addition, one-move undo, hints, and a discovery collection.
 - The default set demonstrates 想 → 相 + 心, followed by a later one-level split of 相 → 木 + 目.
 - The earlier ChID scramble workspace is superseded. Its experimental data/scripts remain for future Hidden Message work, which is not part of this MVP.
 
 ### 7.3 Mode C (Phase 3): Tile/Board mode
+
 - Board adjacency + morphing rules using shared components.
 - Not required for MVP.
 
@@ -168,21 +188,30 @@ Goal: build characters quickly without letting the tray overflow.
 ## 8) Functional requirements (MVP)
 
 ### 8.1 Preprocessing tool (must-have)
+
 Input: Make Me a Hanzi `dictionary.txt` (JSONL)
 
 Output to `public/data/`:
-1) `decomp.json`
+
+1. `decomp.json`
+
 - `char -> [child1, child2, ...]` (one-level, normalized)
-2) `compose_pairs.json`
+
+2. `compose_pairs.json`
+
 - key `"A|B" -> [parentChars...]` (A,B normalized; include both orders for MVP)
-3) `component_freq.json`
+
+3. `component_freq.json`
+
 - `componentChar -> count` based on normalized one-level children
 
 Constraints:
+
 - Stream JSONL in two passes (catalog supported characters, then generate indices).
 - Reject unknown, unsupported, or non-Han children. Nested structures require a reviewed extension validated against the exact IDS and all leaves. Never silently drop a child.
 
 Acceptance checks:
+
 - Print counts: total processed, decomposable count, compose index size
 - Verify sample:
   - 想 decomposes to 相 + 心
@@ -190,13 +219,17 @@ Acceptance checks:
 - Print top 20 components by frequency
 
 ### 8.2 Client rules engine (must-have)
+
 Expose functions:
+
 - `decompose(char) -> string[] | null`
 - `compose(a, b) -> string[]` (returns candidate parents, possibly empty)
 - `normalize(char) -> char`
 
 ### 8.3 UI (MVP)
+
 Layout:
+
 - Explore / Timed challenge mode switch and pinyin toggle.
 - Character board (click to split), component tray (select two to combine), and ambiguity chooser.
 - Field guide with pronunciation, meaning, and one-level decomposition.
@@ -205,6 +238,7 @@ Layout:
 - A site-wide language selector for English, Traditional Chinese, and Simplified Chinese; retain the interface preference across routes and reloads.
 
 Interactions:
+
 - Click a decomposable tile face → its children move to the tray or replace it in place within the tray. A separate + control on decomposable tray tiles selects them intact.
 - Animate transformations and surviving-tile layout shifts with inert visual copies; support interruption and reduced-motion preferences.
 - Select two or three tray tiles → Combine → choose a result when needed → consumed inputs become one board tile.
@@ -234,6 +268,7 @@ Interactions:
 ## 11) Milestones (step-by-step, each testable)
 
 ### Milestone 0 — Repo + Next.js skeleton
+
 - Create Next.js + TS app
 - Render empty Board and Tray components
 - Prepare a GitHub Pages-compatible static export; publish after the public release is reviewed.
@@ -241,12 +276,14 @@ Interactions:
 **Test:** loads locally; public GitHub Pages deployment is a separate release step.
 
 ### Milestone 1 — Preprocessing script outputs indices
+
 - Add `scripts/build_indices.(ts|py)`
 - Generate `public/data/decomp.json`, `compose_pairs.json`, `component_freq.json`
 
 **Test:** run script; verify sample and print top components.
 
 ### Milestone 2 — Data inspector page
+
 - Add a debug page:
   - input: character -> show decomposition children
   - input: A,B -> show compose candidates
@@ -254,12 +291,14 @@ Interactions:
 **Test:** 想 -> 相+心; 相+心 -> 想.
 
 ### Milestone 3 — Click-to-decompose on the board
+
 - Populate board with a few known decomposable characters
 - Click -> remove parent, add children to tray
 
 **Test:** click 想 creates 相 and 心 in tray.
 
 ### Milestone 4 — Compose from tray (operator-free)
+
 - Select two tray tiles, then Combine
 - Use compose index to generate candidates
 - If multiple: chooser UI; else auto
@@ -268,6 +307,7 @@ Interactions:
 **Test:** combine 相 + 心 -> choose 想 (if multiple, pick it) -> board shows 想.
 
 ### Milestone 5 — Mode A loop (timer + drip + overflow)
+
 - Implement timer, periodic tile addition, overflow end condition
 - Score and +time on successful compose
 - Reset/new run
@@ -275,6 +315,7 @@ Interactions:
 **Test:** playable loop, visible progress, consistent end conditions.
 
 ### Milestone 6 — MVP polish + deploy
+
 - Clear on-screen instructions
 - Loading/error states for indices
 - GitHub Pages deployment works with the static indices at `/xiang/`
@@ -282,6 +323,7 @@ Interactions:
 ---
 
 ## 12) Open questions (explicitly postponed)
+
 - Operator-aware composition UI (⿰ vs ⿱ selection)
 - Four-or-more-tile composition, alternate recipes, and general nested IDS resolution
 - Full component variant normalization coverage
@@ -291,6 +333,7 @@ Interactions:
 ---
 
 ## 13) Definition of Done (MVP implementation)
+
 - Indices generated from Make Me a Hanzi dictionary data
 - Production app loads committed static indices; GitHub Pages deployment is verified separately
 - Click-to-decompose works for a meaningful set of characters

@@ -13,6 +13,7 @@ export type InkLayer = {
   body: WobbleBody;
   surfaceBody?: WobbleBody;
   character?: string;
+  objectId?: number;
 };
 export type SilkSupportSurface = {
   body: WobbleBody;
@@ -354,6 +355,27 @@ function drawMahjongTile(
   ctx.restore();
 }
 
+function drawTileHighlight(
+  ctx: CanvasRenderingContext2D,
+  body: WobbleBody,
+  ratio: number,
+) {
+  const pose = body.pose();
+  const width = body.size * body.scaleX + 38;
+  const height = body.size * body.scaleY + 38;
+  ctx.save();
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.translate(pose.x, pose.y);
+  ctx.rotate(pose.angle);
+  ctx.shadowColor = "rgba(190, 119, 36, .48)";
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#bd762b";
+  roundedRect(ctx, -width / 2 - 4, -height / 2 - 4, width + 8, height + 8, 23);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function makeInkPath(
   ink: Ink,
   locate: (binding: Binding) => { point: Point; drape: number },
@@ -377,6 +399,7 @@ export function drawLayers(
   layers: InkLayer[],
   ratio: number,
   style: VisualStyle = "flat",
+  highlightedTileIds: ReadonlySet<number> = new Set(),
 ) {
   const body = layers[0]?.surfaceBody ?? layers[0]?.body;
   if (!body) return;
@@ -394,8 +417,13 @@ export function drawLayers(
       (candidate) => candidate.body === surface,
     );
     const surfacePose = surfaceSnapshot?.pose ?? surface.pose();
-    if (style !== "flat" && !drawnSurfaces.has(surface)) {
-      drawMahjongTile(ctx, surface, ratio, style);
+    if (!drawnSurfaces.has(surface)) {
+      if (style !== "flat") drawMahjongTile(ctx, surface, ratio, style);
+      if (
+        layer.objectId !== undefined &&
+        highlightedTileIds.has(layer.objectId)
+      )
+        drawTileHighlight(ctx, surface, ratio);
       drawnSurfaces.add(surface);
     }
     const projected = makeInkPath(layer.ink, (binding) => {

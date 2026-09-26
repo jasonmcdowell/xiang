@@ -190,16 +190,16 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Back to the game ↗": "回到遊戲 ↗",
     "Pull it apart. Bring it back together.": "拆開它，再把它組回來。",
     "Character gameboard": "漢字遊戲區",
-    "Physical {board} playground in {style} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.":
-      "{board}的物理遊樂場，使用{style}表面。拖曳可見筆畫以拉出部件，原字牌會留在原位。部件脫離後，新字牌會跟隨手指，直到放開。拖曳空白牌面可移動整個漢字。讓相容字牌重疊，或將筆畫拖到相容字牌上，即可重新組合。",
+    "Physical {board} playground in {style} surface style. Drag a mapped ink component while its source tile and remaining strokes stay in place. As soon as the component clears its source tile, it becomes a new tile that follows the held strokes until release, even if other tiles are nearby. Drag ink on a character without a supported decomposition to move the tile and ink together. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold a detachable piece's ink over the compatible tile, to recombine.":
+      "{board}的物理遊樂場，使用{style}表面。拖曳有對應拆解方式的筆畫部件時，原字牌和其餘筆畫會留在原位；部件一離開原字牌，就會成為新字牌並跟隨手指直到放開，即使附近還有其他字牌也一樣。若漢字沒有受支援的拆解方式，拖曳筆畫會連同字牌一起移動。拖曳空白牌面也可移動整個漢字。讓相容字牌重疊，或將可拆離部件的筆畫拖到相容字牌上，即可重新組合。",
     "The character outlines couldn’t load.": "漢字筆畫外框載入失敗。",
     "The characters are taking shape…": "漢字正在成形……",
     "A little give. A little gravity.": "一點彈性，一點重力。",
     "Playground controls": "遊樂場控制項",
     "HOW TO PLAY": "玩法說明",
     "Pull, place, recombine": "拉開、擺放、重新組合",
-    "Start with five characters. Pull a mapped stroke group away until it becomes its own tile. Hold ink over a compatible tile or overlap the tiles to guide the strokes back together.":
-      "從五個漢字開始。拉開已標記的筆畫組，直到它成為獨立字牌。將筆畫停在相容字牌上方，或讓字牌重疊，引導筆畫重新組合。",
+    "Start with five characters. Pull a mapped stroke group away. The rest stays in place; as soon as the component clears its source tile, both pieces become tiles and the pulled tile follows your finger until release. Other tiles do not need to be moved out of the way. On characters without a supported decomposition, dragging the strokes moves the tile and ink together. Overlap compatible tiles to recombine them, or hold a detachable piece's ink over the compatible tile to guide it into place.":
+      "從五個漢字開始。拉開有對應拆解方式的筆畫組，其餘部分會留在原位；部件一離開原字牌，兩部分就會成為字牌，且被拉動的字牌會跟隨手指直到放開。即使附近還有其他字牌，也不必先移開。沒有受支援拆解方式的漢字，拖曳筆畫時會連同字牌一起移動。讓相容字牌重疊即可重新組合；也可將可拆離部件的筆畫停在相容字牌上方，引導它就位。",
     "Double-tap a character or one of its strokes to unfold one supported step.":
       "連點兩下漢字或其中一組筆畫，即可拆解一個受支援的步驟。",
     "Drag a blank tile face to move the whole character. Fixed keeps it centered; Weighted gives it more movement.":
@@ -240,6 +240,18 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Tile interaction": "字牌互動",
     "Tile repulsion": "字牌互斥",
     "loose faces nudge apart": "鬆動的牌面會輕輕推開彼此",
+    "Tile tools": "字牌工具",
+    "Arrange mode": "排列方式",
+    "Arrange tiles": "排列字牌",
+    "One at a time": "逐一移動",
+    "All at once": "同時移動",
+    "Group by shared components": "依共用部件分組",
+    "Snap to grid when released": "放開時吸附至格線",
+    "Highlight compatible tiles": "標示可組合字牌",
+    "Hide tile hints": "隱藏字牌提示",
+    "{count} compatible tiles highlighted": "已標示 {count} 張可組合字牌",
+    "No compatible loose tiles for this character.":
+      "目前沒有可與此字組合的獨立字牌。",
     "Surface style": "表面樣式",
     Flat: "平面",
     "ink only": "只有筆畫",
@@ -275,8 +287,8 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
       "五個起始漢字已就緒。從任一漢字拉出部件來探索。",
     "Pull a component outward. Stretch its seam to tear it free.":
       "向外拉動部件。將接縫拉開即可撕離。",
-    "Pull {part} away. The rest resists and gives a little.":
-      "拉開 {part}。其餘部分會稍作抵抗並跟著變形。",
+    "Pull {part} away. The rest stays in place.":
+      "拉開 {part}。其餘部分會留在原位。",
     "Move a tile to make room for both components.":
       "移動字牌，為兩個部件騰出空間。",
     "Finish the current drag before adding a character.":
@@ -296,8 +308,10 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
       "已將「{char}」加入成新字牌。拉出部件，或與其他漢字組合。",
     "There isn’t room for another tile. Move a tile and try again.":
       "空間不足，無法再加入字牌。請移動一張字牌後再試。",
-    "Keep pulling until the tile faces have room.":
-      "繼續拉動，直到字牌之間有足夠空間。",
+    "Keep pulling until the component clears its source tile.":
+      "繼續拉動，直到部件離開原字牌。",
+    "Guide the pulled component back inside the board before it separates.":
+      "在部件分離前，請將它移回遊戲區內。",
     "Guide both pieces back inside the board before they separate.":
       "請先將兩個部件移回遊戲區，再讓它們分離。",
     "Start with five characters. Pull a mapped stroke group away until it becomes its own tile.":
@@ -554,16 +568,16 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Back to the game ↗": "回到游戏 ↗",
     "Pull it apart. Bring it back together.": "拆开它，再把它组回来。",
     "Character gameboard": "汉字游戏区",
-    "Physical {board} playground in {style} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.":
-      "{board}的物理游乐场，使用{style}表面。拖动可见笔画以拉出部件，原字牌会留在原位。部件脱离后，新字牌会跟随手指，直到松开。拖动空白牌面可移动整个汉字。让相容字牌重叠，或将笔画拖到相容字牌上，即可重新组合。",
+    "Physical {board} playground in {style} surface style. Drag a mapped ink component while its source tile and remaining strokes stay in place. As soon as the component clears its source tile, it becomes a new tile that follows the held strokes until release, even if other tiles are nearby. Drag ink on a character without a supported decomposition to move the tile and ink together. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold a detachable piece's ink over the compatible tile, to recombine.":
+      "{board}的物理游乐场，使用{style}表面。拖动有对应拆解方式的笔画部件时，原字牌和其余笔画会留在原位；部件一离开原字牌，就会成为新字牌并跟随手指直到松开，即使附近还有其他字牌也一样。若汉字没有受支持的拆解方式，拖动笔画会连同字牌一起移动。拖动空白牌面也可移动整个汉字。让相容字牌重叠，或将可拆离部件的笔画拖到相容字牌上，即可重新组合。",
     "The character outlines couldn’t load.": "汉字笔画外框加载失败。",
     "The characters are taking shape…": "汉字正在成形……",
     "A little give. A little gravity.": "一点弹性，一点重力。",
     "Playground controls": "游乐场控制项",
     "HOW TO PLAY": "玩法说明",
     "Pull, place, recombine": "拉开、摆放、重新组合",
-    "Start with five characters. Pull a mapped stroke group away until it becomes its own tile. Hold ink over a compatible tile or overlap the tiles to guide the strokes back together.":
-      "从五个汉字开始。拉开已标记的笔画组，直到它成为独立字牌。将笔画停在相容字牌上方，或让字牌重叠，引导笔画重新组合。",
+    "Start with five characters. Pull a mapped stroke group away. The rest stays in place; as soon as the component clears its source tile, both pieces become tiles and the pulled tile follows your finger until release. Other tiles do not need to be moved out of the way. On characters without a supported decomposition, dragging the strokes moves the tile and ink together. Overlap compatible tiles to recombine them, or hold a detachable piece's ink over the compatible tile to guide it into place.":
+      "从五个汉字开始。拉开有对应拆解方式的笔画组，其余部分会留在原位；部件一离开原字牌，两部分就会成为字牌，且被拉动的字牌会跟随手指直到松开。即使附近还有其他字牌，也不必先移开。没有受支持拆解方式的汉字，拖动笔画时会连同字牌一起移动。让相容字牌重叠即可重新组合；也可将可拆离部件的笔画停在相容字牌上方，引导它就位。",
     "Double-tap a character or one of its strokes to unfold one supported step.":
       "双击汉字或其中一组笔画，即可拆解一个受支持的步骤。",
     "Drag a blank tile face to move the whole character. Fixed keeps it centered; Weighted gives it more movement.":
@@ -603,6 +617,18 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Tile interaction": "字牌互动",
     "Tile repulsion": "字牌互斥",
     "loose faces nudge apart": "松动的牌面会轻轻推开彼此",
+    "Tile tools": "字牌工具",
+    "Arrange mode": "排列方式",
+    "Arrange tiles": "排列字牌",
+    "One at a time": "逐一移动",
+    "All at once": "同时移动",
+    "Group by shared components": "按共有部件分组",
+    "Snap to grid when released": "松开时吸附至网格",
+    "Highlight compatible tiles": "标示可组合字牌",
+    "Hide tile hints": "隐藏字牌提示",
+    "{count} compatible tiles highlighted": "已标示 {count} 张可组合字牌",
+    "No compatible loose tiles for this character.":
+      "目前没有可与此字组合的独立字牌。",
     "Surface style": "表面样式",
     Flat: "平面",
     "ink only": "只有笔画",
@@ -638,8 +664,8 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
       "五个起始汉字已就绪。从任一汉字拉出部件来探索。",
     "Pull a component outward. Stretch its seam to tear it free.":
       "向外拉动部件。拉开接缝即可撕离。",
-    "Pull {part} away. The rest resists and gives a little.":
-      "拉开 {part}。其余部分会稍作抵抗并跟着变形。",
+    "Pull {part} away. The rest stays in place.":
+      "拉开 {part}。其余部分会留在原位。",
     "Move a tile to make room for both components.":
       "移动字牌，为两个部件腾出空间。",
     "Finish the current drag before adding a character.":
@@ -659,8 +685,10 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
       "已将“{char}”添加为新字牌。拉出部件，或与其他汉字组合。",
     "There isn’t room for another tile. Move a tile and try again.":
       "空间不足，无法再添加字牌。请移动一张字牌后重试。",
-    "Keep pulling until the tile faces have room.":
-      "继续拉动，直到字牌之间有足够空间。",
+    "Keep pulling until the component clears its source tile.":
+      "继续拉动，直到部件离开原字牌。",
+    "Guide the pulled component back inside the board before it separates.":
+      "在部件分离前，请将它移回游戏区内。",
     "Guide both pieces back inside the board before they separate.":
       "请先将两个部件移回游戏区，再让它们分离。",
     "The dictionary couldn’t load. Please reload to try again.":
@@ -772,11 +800,9 @@ export function translateRuntimeText(
       "No usable drawing data was found for {char}. Try another dictionary character.",
       { char: match[1] },
     );
-  match = source.match(
-    /^Pull (.+) away\. The rest resists and gives a little\.$/,
-  );
+  match = source.match(/^Pull (.+) away\. The rest stays in place\.$/);
   if (match)
-    return t("Pull {part} away. The rest resists and gives a little.", {
+    return t("Pull {part} away. The rest stays in place.", {
       part: match[1],
     });
   match = source.match(

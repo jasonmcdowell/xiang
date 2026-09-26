@@ -17,7 +17,11 @@ import {
   type PlaygroundManifest,
 } from "@/lib/playgroundAssetsClient";
 import { drawConnections, drawLayers, drawMagnet } from "@/lib/wobbleDrawing";
-import { PlaygroundWorld, type PhysicsMode } from "@/lib/playgroundWorld";
+import {
+  PlaygroundWorld,
+  type ArrangeMode,
+  type PhysicsMode,
+} from "@/lib/playgroundWorld";
 import PlaygroundBoard, { type BoardMaterial } from "./PlaygroundBoard";
 import type { VisualStyle } from "@/lib/wobbleDrawing";
 import styles from "./playground.module.css";
@@ -28,6 +32,8 @@ type Status = {
   character: string;
   boardPreset: "starters" | "single" | "custom";
   tileCount: number;
+  dragging?: boolean;
+  animatingTiles?: boolean;
 };
 type PointerStart = {
   id: number;
@@ -55,6 +61,8 @@ export default function Playground() {
     mode: "fixed" as PhysicsMode,
     visualStyle: "raised" as VisualStyle,
     tileRepulsion: true,
+    snapToGrid: false,
+    highlightedTileIds: new Set<number>(),
   });
   const [ready, setReady] = useState(false);
   const [samples, setSamples] = useState(starterSamples);
@@ -80,6 +88,12 @@ export default function Playground() {
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("raised");
   const [boardMaterial, setBoardMaterial] = useState<BoardMaterial>("bamboo");
   const [tileRepulsion, setTileRepulsion] = useState(true);
+  const [snapToGrid, setSnapToGrid] = useState(false);
+  const [arrangeMode, setArrangeMode] = useState<ArrangeMode>("one-by-one");
+  const [focusedTileId, setFocusedTileId] = useState<number | null>(null);
+  const focusedTileIdRef = useRef<number | null>(null);
+  const [hintsVisible, setHintsVisible] = useState(false);
+  const [hintedTileIds, setHintedTileIds] = useState<number[]>([]);
   const [focusedCharacter, setFocusedCharacter] = useState("想");
   const [dictionary, setDictionary] = useState<PlaygroundDictionary | null>(
     null,
@@ -92,6 +106,15 @@ export default function Playground() {
     boardPreset: "starters",
     tileCount: 5,
   });
+
+  const focusTile = useCallback((character: string, id: number | null) => {
+    focusedTileIdRef.current = id;
+    setFocusedCharacter(character);
+    setFocusedTileId(id);
+    setHintsVisible(false);
+    setHintedTileIds([]);
+    settingsRef.current.highlightedTileIds.clear();
+  }, []);
 
   const unlockAudio = useCallback(() => {
     try {
@@ -126,11 +149,15 @@ export default function Playground() {
   const handleWorldEvents = useCallback(
     (world: PlaygroundWorld) => {
       for (const event of world.takeEvents()) {
-        setFocusedCharacter(event.character);
+        const characters = world.snapshot().characters;
+        const focused = [...characters]
+          .reverse()
+          .find((object) => object.char === event.character);
+        focusTile(event.character, focused?.id ?? null);
         if (event.type === "tear") playTearPop();
       }
     },
-    [playTearPop],
+    [focusTile, playTearPop],
   );
 
   useEffect(() => {
@@ -161,6 +188,8 @@ export default function Playground() {
       mode,
       visualStyle,
       tileRepulsion,
+      snapToGrid,
+      highlightedTileIds: settingsRef.current.highlightedTileIds,
     };
     const world = worldRef.current;
     if (world) {
@@ -169,8 +198,9 @@ export default function Playground() {
       world.setMode(mode);
       world.setVisualStyle(visualStyle);
       world.setTileRepulsion(tileRepulsion);
+      world.setSnapToGrid(snapToGrid);
     }
-  }, [softness, reduced, mode, visualStyle, tileRepulsion]);
+  }, [softness, reduced, mode, visualStyle, tileRepulsion, snapToGrid]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -194,6 +224,7 @@ export default function Playground() {
         world.layers(),
         ratioRef.current,
         settingsRef.current.visualStyle,
+        settingsRef.current.highlightedTileIds,
       );
       const magnet = world.magnet();
       if (magnet)
@@ -225,6 +256,8 @@ export default function Playground() {
         character: world.selectedCharacter,
         boardPreset: world.boardPreset,
         tileCount: world.tileCount,
+        dragging: world.isManipulating,
+        animatingTiles: world.isAnimatingTiles,
       });
     };
     const requestSceneAssets = () => {
@@ -285,7 +318,7 @@ export default function Playground() {
       if (!world.pointerDown(point, event.pointerId)) return;
       const target = world.pointerTarget(event.pointerId);
       if (target) {
-        setFocusedCharacter(target.character);
+        focusTile(target.character, target.id);
         pointerStartsRef.current.set(event.pointerId, {
           id: target.id,
           character: target.character,
@@ -379,7 +412,10 @@ export default function Playground() {
       if (event.target !== canvas) return;
       if (event.key.toLowerCase() === "r") {
         world.reset();
-        setFocusedCharacter(world.selectedCharacter);
+        const focused = world
+          .snapshot()
+          .characters.find((object) => object.char === world.selectedCharacter);
+        focusTile(world.selectedCharacter, focused?.id ?? null);
         publish();
         draw();
       } else if (event.key.toLowerCase() === "f") {
@@ -410,11 +446,17 @@ export default function Playground() {
 
     const snapshot = () =>
       JSON.stringify(
-        worldRef.current?.snapshot() ?? {
-          mode: "wobble-playground",
-          character: "想",
-          ready: false,
-        },
+        worldRef.current
+          ? {
+              ...worldRef.current.snapshot(),
+              focusedTileId: focusedTileIdRef.current,
+              highlightedTileIds: [...settingsRef.current.highlightedTileIds],
+            }
+          : {
+              mode: "wobble-playground",
+              character: "想",
+              ready: false,
+            },
       );
     const advance = (ms: number) => {
       manual = true;
@@ -504,6 +546,7 @@ export default function Playground() {
           world.setMode(settingsRef.current.mode);
           world.setVisualStyle(settingsRef.current.visualStyle);
           world.setTileRepulsion(settingsRef.current.tileRepulsion);
+          world.setSnapToGrid(settingsRef.current.snapToGrid);
           publish();
           draw();
         };
@@ -539,7 +582,7 @@ export default function Playground() {
         delete window.render_game_to_text;
       if (window.advanceTime === advance) delete window.advanceTime;
     };
-  }, [attempt, handleWorldEvents, unlockAudio]);
+  }, [attempt, focusTile, handleWorldEvents, unlockAudio]);
 
   const selectCharacter = async (char: string) => {
     const world = worldRef.current;
@@ -560,7 +603,8 @@ export default function Playground() {
       return;
     }
     setSelectionBusy(false);
-    setFocusedCharacter(char);
+    const focused = world.snapshot().characters[0];
+    focusTile(char, focused?.id ?? null);
     setStatus({
       phase: world.phase,
       message: world.message,
@@ -576,6 +620,7 @@ export default function Playground() {
         world.layers(),
         ratioRef.current,
         settingsRef.current.visualStyle,
+        settingsRef.current.highlightedTileIds,
       );
       const magnet = world.magnet();
       if (magnet)
@@ -609,7 +654,10 @@ export default function Playground() {
       if (worldRef.current !== world) return;
       world.registerAssets(assets);
       const result = world.addCharacter(character);
-      if (result === "added") setFocusedCharacter(character);
+      if (result === "added") {
+        const added = world.snapshot().characters.at(-1);
+        focusTile(character, added?.id ?? null);
+      }
       if (result === "added" && clearInput) setCharacterInput("");
       setStatus({
         phase: world.phase,
@@ -626,6 +674,7 @@ export default function Playground() {
           world.layers(),
           ratioRef.current,
           settingsRef.current.visualStyle,
+          settingsRef.current.highlightedTileIds,
         );
         const magnet = world.magnet();
         if (magnet)
@@ -659,7 +708,8 @@ export default function Playground() {
     const world = worldRef.current;
     if (!world) return;
     world.resetStarters();
-    setFocusedCharacter("想");
+    const focused = world.snapshot().characters[0];
+    focusTile("想", focused?.id ?? null);
     setSelectionError("");
     setStatus({
       phase: world.phase,
@@ -673,7 +723,10 @@ export default function Playground() {
     const world = worldRef.current;
     if (!world) return;
     world.reset();
-    setFocusedCharacter(world.selectedCharacter);
+    const focused = world
+      .snapshot()
+      .characters.find((object) => object.char === world.selectedCharacter);
+    focusTile(world.selectedCharacter, focused?.id ?? null);
     setStatus({
       phase: world.phase,
       message: world.message,
@@ -685,6 +738,31 @@ export default function Playground() {
   const nudge = () => {
     worldRef.current?.nudge();
   };
+  const arrangeTiles = () => {
+    const world = worldRef.current;
+    if (!world || !world.arrangeTiles(arrangeMode)) return;
+    setStatus((current) => ({
+      ...current,
+      dragging: world.isManipulating,
+      animatingTiles: world.isAnimatingTiles,
+    }));
+  };
+  const toggleTileHints = () => {
+    if (hintsVisible) {
+      settingsRef.current.highlightedTileIds.clear();
+      setHintedTileIds([]);
+      setHintsVisible(false);
+      return;
+    }
+    const world = worldRef.current;
+    if (!world || focusedTileId === null) return;
+    const compatible = world.compatibleTileIds(focusedTileId);
+    settingsRef.current.highlightedTileIds = new Set(compatible);
+    setHintedTileIds(compatible);
+    setHintsVisible(true);
+  };
+  const tileActionsDisabled =
+    !ready || selectionBusy || !!status.dragging || !!status.animatingTiles;
   const boardDescription =
     status.boardPreset === "starters"
       ? t("{count} starter characters", { count: status.tileCount })
@@ -735,7 +813,7 @@ export default function Playground() {
               tabIndex={0}
               role="application"
               aria-label={t(
-                "Physical {board} playground in {style} surface style. Drag visible ink to pull a component while its source tile stays in place. Once it tears free, its new tile follows the held ink until release. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold ink over the compatible tile, to recombine.",
+                "Physical {board} playground in {style} surface style. Drag a mapped ink component while its source tile and remaining strokes stay in place. As soon as the component clears its source tile, it becomes a new tile that follows the held strokes until release, even if other tiles are nearby. Drag ink on a character without a supported decomposition to move the tile and ink together. Drag a blank tile face to move the whole character. Overlap compatible tile faces, or hold a detachable piece's ink over the compatible tile, to recombine.",
                 { board: boardDescription, style: surfaceName },
               )}
               aria-describedby="playground-keys"
@@ -798,7 +876,7 @@ export default function Playground() {
             <h2>{t("Pull, place, recombine")}</h2>
             <p>
               {t(
-                "Start with five characters. Pull a mapped stroke group away until it becomes its own tile. Hold ink over a compatible tile or overlap the tiles to guide the strokes back together.",
+                "Start with five characters. Pull a mapped stroke group away. The rest stays in place; as soon as the component clears its source tile, both pieces become tiles and the pulled tile follows your finger until release. Other tiles do not need to be moved out of the way. On characters without a supported decomposition, dragging the strokes moves the tile and ink together. Overlap compatible tiles to recombine them, or hold a detachable piece's ink over the compatible tile to guide it into place.",
               )}
             </p>
             <p>
@@ -1079,6 +1157,66 @@ export default function Playground() {
                 <span>{t("loose faces nudge apart")}</span>
               </label>
             </fieldset>
+
+            <section className={styles.tileTools} aria-label={t("Tile tools")}>
+              <label className={styles.controlLabel} htmlFor="arrange-mode">
+                {t("Arrange mode")}
+              </label>
+              <select
+                id="arrange-mode"
+                aria-label={t("Arrange mode")}
+                value={arrangeMode}
+                disabled={tileActionsDisabled}
+                onChange={(event) =>
+                  setArrangeMode(event.target.value as ArrangeMode)
+                }
+              >
+                <option value="one-by-one">{t("One at a time")}</option>
+                <option value="all-at-once">{t("All at once")}</option>
+                <option value="by-component">
+                  {t("Group by shared components")}
+                </option>
+              </select>
+              <button
+                type="button"
+                disabled={tileActionsDisabled}
+                onClick={arrangeTiles}
+              >
+                {t("Arrange tiles")}
+              </button>
+              <label className={styles.tileToolCheck}>
+                <input
+                  type="checkbox"
+                  checked={snapToGrid}
+                  disabled={!ready || selectionBusy}
+                  onChange={(event) => setSnapToGrid(event.target.checked)}
+                />
+                {t("Snap to grid when released")}
+              </label>
+              <button
+                type="button"
+                aria-pressed={hintsVisible}
+                disabled={tileActionsDisabled || focusedTileId === null}
+                onClick={toggleTileHints}
+              >
+                {hintsVisible
+                  ? t("Hide tile hints")
+                  : t("Highlight compatible tiles")}
+              </button>
+              {hintsVisible && (
+                <p
+                  className={styles.tileToolStatus}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {hintedTileIds.length
+                    ? t("{count} compatible tiles highlighted", {
+                        count: hintedTileIds.length,
+                      })
+                    : t("No compatible loose tiles for this character.")}
+                </p>
+              )}
+            </section>
 
             <fieldset className={styles.stylePicker}>
               <legend>{t("Surface style")}</legend>

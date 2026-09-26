@@ -82,6 +82,13 @@ const getFaceOverlap = (first, second) => ({
     (first.tile.height + second.tile.height) / 2 -
     Math.abs(first.tile.center.y - second.tile.center.y),
 });
+const assertSiblingFacesSeparate = (first, second, label) => {
+  const overlap = getFaceOverlap(first, second);
+  assert.ok(
+    overlap.x <= 0 || overlap.y <= 0,
+    `${label}: sibling faces ${first.char} and ${second.char} overlap`,
+  );
+};
 const dragTileFace = async (
   target,
   box,
@@ -206,6 +213,7 @@ const dragInkToPoint = async (
   snapshot,
   character,
   destination,
+  expectedInteraction = "ink",
 ) => {
   const object = snapshot.characters.find((item) => item.char === character);
   assert.ok(object?.grabPoints.length, `find ${character} ink to drag`);
@@ -216,7 +224,7 @@ const dragInkToPoint = async (
   await target.mouse.down();
   const grabbed = await state(target);
   assert.equal(grabbed.activeContacts[0]?.character, character);
-  assert.equal(grabbed.activeContacts[0]?.interaction, "ink");
+  assert.equal(grabbed.activeContacts[0]?.interaction, expectedInteraction);
   for (let i = 1; i <= steps; i++) {
     const amount = i / steps;
     await target.mouse.move(
@@ -314,7 +322,9 @@ const guideHeldHeartIntoPlace = async (target, box, initialState) => {
       return current;
     const magnet = current.magnet;
     const contact = current.activeContacts.find(
-      (item) => item.character === "心" && item.interaction === "ink",
+      (item) =>
+        item.character === "心" &&
+        (item.interaction === "ink" || item.interaction === "tile"),
     );
     if (magnet.active && contact) {
       const dx = magnet.targetTo.x - magnet.to.x;
@@ -477,8 +487,12 @@ try {
   assertNoTileOverlap(doubleTapState.characters, "double-tapped 想 split");
   assertUniformTiles(doubleTapState.characters, "double-tapped 想 split");
   const separatedPair = [
-    doubleTapState.characters.find((object) => object.char === "相" && object.free),
-    doubleTapState.characters.find((object) => object.char === "心" && object.free),
+    doubleTapState.characters.find(
+      (object) => object.char === "相" && object.free,
+    ),
+    doubleTapState.characters.find(
+      (object) => object.char === "心" && object.free,
+    ),
   ];
   assert.ok(separatedPair[0] && separatedPair[1]);
   const distanceBeforeRepulsion = Math.hypot(
@@ -492,8 +506,12 @@ try {
   await advance(doubleTapLab, 2000);
   doubleTapState = await state(doubleTapLab);
   const repelledPair = [
-    doubleTapState.characters.find((object) => object.char === "相" && object.free),
-    doubleTapState.characters.find((object) => object.char === "心" && object.free),
+    doubleTapState.characters.find(
+      (object) => object.char === "相" && object.free,
+    ),
+    doubleTapState.characters.find(
+      (object) => object.char === "心" && object.free,
+    ),
   ];
   assert.ok(repelledPair[0] && repelledPair[1]);
   const distanceAfterRepulsion = Math.hypot(
@@ -667,6 +685,56 @@ try {
     .innerText();
   assert.match(tornDetails, /rén/);
   assert.match(tornDetails, /person|people/i);
+  const terminalPiece = current.characters.find(
+    (object) => object.char === "人",
+  );
+  const terminalSibling = current.characters.find(
+    (object) => object.char === "言",
+  );
+  assert.equal(terminalPiece.decomposable, false);
+  const terminalTileHome = { ...terminalPiece.tile.center };
+  const terminalInkOffset = {
+    x: terminalPiece.center.x - terminalTileHome.x,
+    y: terminalPiece.center.y - terminalTileHome.y,
+  };
+  const awayFromSibling = {
+    x: terminalTileHome.x - terminalSibling.tile.center.x,
+    y: terminalTileHome.y - terminalSibling.tile.center.y,
+  };
+  const siblingDistance = Math.hypot(awayFromSibling.x, awayFromSibling.y) || 1;
+  awayFromSibling.x /= siblingDistance;
+  awayFromSibling.y /= siblingDistance;
+  const personInkGrip = terminalPiece.grabPoints[0];
+  await page.mouse.move(box.x + personInkGrip.x, box.y + personInkGrip.y);
+  await page.mouse.down();
+  current = await state();
+  assert.equal(
+    current.activeContacts[0]?.interaction,
+    "tile",
+    "a detached piece without its own recipe uses a whole-tile ink grip",
+  );
+  await page.mouse.move(
+    box.x + personInkGrip.x + awayFromSibling.x * 32,
+    box.y + personInkGrip.y + awayFromSibling.y * 32,
+  );
+  await advance(page, 1000 / 60);
+  current = await state();
+  const movedPerson = current.characters.find((object) => object.char === "人");
+  assert.ok(
+    Math.hypot(
+      movedPerson.tile.center.x - terminalTileHome.x,
+      movedPerson.tile.center.y - terminalTileHome.y,
+    ) > 1,
+    "grabbing a detached terminal stroke moves its tile",
+  );
+  assert.ok(
+    Math.hypot(
+      movedPerson.center.x - movedPerson.tile.center.x - terminalInkOffset.x,
+      movedPerson.center.y - movedPerson.tile.center.y - terminalInkOffset.y,
+    ) < 2,
+    "a detached terminal stroke stays attached to its tile",
+  );
+  await page.mouse.up();
   await page.getByLabel("Any dictionary character").fill("一");
   await page.getByRole("button", { name: "Explore" }).click();
   await page.waitForFunction(
@@ -687,29 +755,49 @@ try {
   current = await state();
   assert.equal(current.characters[0].decomposable, false);
   await page.locator('input[name="physics-mode"][value="weighted"]').check();
-  current = await state();
   box = await page.locator("canvas").boundingBox();
-  const womanInkGrip = current.characters[0].grabPoints[0];
-  const womanTileHome = current.characters[0].tile.center;
-  await page.mouse.move(box.x + womanInkGrip.x, box.y + womanInkGrip.y);
-  await page.mouse.down();
-  current = await state();
-  assert.equal(
-    current.activeContacts[0]?.interaction,
-    "tile",
-    "ink on a non-decomposable 女 grabs the whole tile",
-  );
-  await page.mouse.move(box.x + womanInkGrip.x + 32, box.y + womanInkGrip.y + 18);
-  await advance(page, 1000 / 60);
-  current = await state();
-  assert.ok(
-    Math.hypot(
-      current.characters[0].tile.center.x - womanTileHome.x,
-      current.characters[0].tile.center.y - womanTileHome.y,
-    ) > 1,
-    "dragging 女 ink moves its tile instead of leaving the face behind",
-  );
-  await page.mouse.up();
+  for (const style of ["flat", "raised", "draped", "silk"]) {
+    await page.locator(`input[name="visual-style"][value="${style}"]`).check();
+    current = await state();
+    const woman = current.characters[0];
+    const womanInkGrip = woman.grabPoints[0];
+    const womanTileHome = { ...woman.tile.center };
+    const inkOffsetHome = {
+      x: woman.center.x - womanTileHome.x,
+      y: woman.center.y - womanTileHome.y,
+    };
+    await page.mouse.move(box.x + womanInkGrip.x, box.y + womanInkGrip.y);
+    await page.mouse.down();
+    current = await state();
+    assert.equal(
+      current.activeContacts[0]?.interaction,
+      "tile",
+      `ink on a non-decomposable 女 grabs the whole tile in ${style} style`,
+    );
+    await page.mouse.move(
+      box.x + womanInkGrip.x + 32,
+      box.y + womanInkGrip.y + 18,
+    );
+    await advance(page, 1000 / 60);
+    current = await state();
+    const movedWoman = current.characters[0];
+    assert.ok(
+      Math.hypot(
+        movedWoman.tile.center.x - womanTileHome.x,
+        movedWoman.tile.center.y - womanTileHome.y,
+      ) > 1,
+      `dragging 女 ink moves its tile in ${style} style`,
+    );
+    assert.ok(
+      Math.hypot(
+        movedWoman.center.x - movedWoman.tile.center.x - inkOffsetHome.x,
+        movedWoman.center.y - movedWoman.tile.center.y - inkOffsetHome.y,
+      ) < 2,
+      `dragging 女 ink keeps it attached to its tile in ${style} style`,
+    );
+    await page.mouse.up();
+  }
+  await page.locator('input[name="visual-style"][value="raised"]').check();
   await page.locator('input[name="physics-mode"][value="fixed"]').check();
   await page.getByRole("button", { name: "林", exact: true }).click();
   await page.waitForFunction(
@@ -749,34 +837,58 @@ try {
   const heartStart = screenPoint(box, current.componentGrabPoints["心"][0]);
   await page.mouse.move(heartStart.x, heartStart.y);
   await page.mouse.down();
-  for (let i = 1; i <= 12 && current.phase !== "loose"; i++) {
-    await page.mouse.move(heartStart.x, heartStart.y + i * 9);
-    await advance(page, 1000 / 60);
-    current = await state();
-  }
+  current = await state();
   assert.equal(current.phase, "stretching");
-  assert.deepEqual(
-    current.renderedInkLayers,
-    ["相", "心", "相", "明", "休", "好"],
-    "a tear preview replaces only its source ink and keeps every other board character rendered",
-  );
-  await page.screenshot({
-    path: "output/playground/five-starter-stretch.png",
-    fullPage: true,
-  });
-  for (let i = 13; i <= 50 && current.phase !== "loose"; i++) {
+  assert.equal(current.tearing.tetherCount, 0);
+  const stationaryRestCenter = { ...current.tearing.restCenter };
+  const stationaryRestInkCenter = { ...current.tearing.restInkCenter };
+  const stationarySourceTileCenter = { ...current.tearing.sourceTileCenter };
+  let tearStep = 0;
+  for (let i = 1; i <= 50 && current.phase !== "loose"; i++) {
     await page.mouse.move(heartStart.x, heartStart.y + i * 9);
     await advance(page, 1000 / 60);
     current = await state();
+    tearStep = i;
+    if (current.tearing) {
+      assert.equal(current.tearing.tetherCount, 0);
+      for (const [actual, expected, label] of [
+        [current.tearing.restCenter, stationaryRestCenter, "remainder body"],
+        [
+          current.tearing.restInkCenter,
+          stationaryRestInkCenter,
+          "remainder ink",
+        ],
+        [
+          current.tearing.sourceTileCenter,
+          stationarySourceTileCenter,
+          "source tile",
+        ],
+      ])
+        assert.ok(
+          Math.hypot(actual.x - expected.x, actual.y - expected.y) < 0.1,
+          `pulling one component leaves the ${label} stationary`,
+        );
+    }
   }
   assert.equal(current.phase, "loose");
+  assert.ok(tearStep <= 50, "the child tile appears once it clears its source");
   assert.equal(current.boardPreset, "starters");
   assert.equal(current.characters.length, 6);
   assert.deepEqual(
     [...current.characters.map((object) => object.char)].sort(),
     ["休", "好", "心", "明", "相", "相"],
   );
-  assertNoTileOverlap(current.characters, "five starter tear");
+  const heldHeartAtSplit = current.characters.find(
+    (object) => object.char === "心" && object.free,
+  );
+  const stationaryXiangAtSplit = current.characters.find(
+    (object) => object.char === "相" && object.free,
+  );
+  assertSiblingFacesSeparate(
+    heldHeartAtSplit,
+    stationaryXiangAtSplit,
+    "five starter tear siblings",
+  );
   assertUniformTiles(current.characters, "five starter tear");
   assertTilesInsideBoard(current.characters, box, "five starter tear");
   const heartAtTear = current.characters.find((object) => object.char === "心");
@@ -1023,27 +1135,39 @@ try {
   );
   await page.mouse.move(firstTearOrigin.x, firstTearOrigin.y);
   await page.mouse.down();
-  for (let i = 1; i <= 12; i++) {
-    await page.mouse.move(firstTearOrigin.x + i * 9, firstTearOrigin.y - i);
-    await advance(page, 1000 / 60);
-  }
   current = await state();
   assert.equal(current.phase, "stretching");
-  assert.deepEqual(
-    current.characters.map((object) => object.char),
-    ["想"],
-    "the character remains one tile while its child faces would overlap",
-  );
-  assert.equal(current.tearing.readyForTiles, false);
-  assert.match(current.message, /tile faces have room/);
-  for (let i = 13; i <= 35 && current.phase === "stretching"; i++) {
+  const initialRestCenter = { ...current.tearing.restCenter };
+  const initialRestInk = { ...current.tearing.restInkCenter };
+  for (let i = 1; i <= 50 && current.phase === "stretching"; i++) {
     await page.mouse.move(firstTearOrigin.x + i * 9, firstTearOrigin.y - i);
     await advance(page, 1000 / 60);
     current = await state();
+    if (current.tearing) {
+      assert.equal(current.tearing.tetherCount, 0);
+      assert.ok(
+        Math.hypot(
+          current.tearing.restCenter.x - initialRestCenter.x,
+          current.tearing.restCenter.y - initialRestCenter.y,
+        ) < 0.1,
+        "the unpulled body stays anchored during a component pull",
+      );
+      assert.ok(
+        Math.hypot(
+          current.tearing.restInkCenter.x - initialRestInk.x,
+          current.tearing.restInkCenter.y - initialRestInk.y,
+        ) < 0.1,
+        "the unpulled strokes do not follow the dragged component",
+      );
+    }
   }
   assert.equal(current.phase, "loose");
   assertUniformTiles(current.characters, "decomposed");
-  assertNoTileOverlap(current.characters, "first tear");
+  assertSiblingFacesSeparate(
+    current.characters.find((object) => object.char === "相"),
+    current.characters.find((object) => object.char === "心"),
+    "first tear siblings",
+  );
   assertTilesInsideBoard(current.characters, box, "first tear");
   assert.deepEqual(
     current.characters.map((object) => object.char),
@@ -1074,7 +1198,11 @@ try {
     ["心", "木", "目"],
   );
   assertUniformTiles(current.characters, "nested decomposition");
-  assertNoTileOverlap(current.characters, "nested tear");
+  assertSiblingFacesSeparate(
+    current.characters.find((object) => object.char === "木"),
+    current.characters.find((object) => object.char === "目"),
+    "nested tear siblings",
+  );
   assertTilesInsideBoard(current.characters, box, "nested tear");
   assert.equal(current.activeContacts[0].character, "木");
   const wood = current.characters.find((object) => object.char === "木");
@@ -1173,7 +1301,7 @@ try {
   });
   await page.mouse.up();
 
-  // Ink can contact the sibling tile and recompose without moving its own tile.
+  // A terminal component's stroke grip carries its tile into the sibling for recombination.
   const inkReassembly = await browser.newPage({
     viewport: { width: 1200, height: 1000 },
   });
@@ -1216,17 +1344,24 @@ try {
     beforeInkOverlap.x <= 0 || beforeInkOverlap.y <= 0,
     "the sibling tile faces remain separate before the ink drag",
   );
-  inkState = await dragInkToPoint(inkReassembly, inkBox, inkState, "心", {
-    x: reassemblyXiangTile.center.x,
-    y: reassemblyXiangTile.center.y + 50,
-  });
+  inkState = await dragInkToPoint(
+    inkReassembly,
+    inkBox,
+    inkState,
+    "心",
+    {
+      x: reassemblyXiangTile.center.x,
+      y: reassemblyXiangTile.center.y + 50,
+    },
+    "tile",
+  );
   assert.equal(
     inkState.magnet.active,
     true,
-    "dragged 心 ink contacting 相's tile engages recombination",
+    "dragged terminal ink carries 心's tile into 相 to engage recombination",
   );
-  assert.equal(inkState.magnet.contact, "ink");
-  assert.equal(inkState.magnet.tileOverlap, null);
+  assert.equal(inkState.magnet.contact, "tiles");
+  assert.notEqual(inkState.magnet.tileOverlap, null);
   await inkReassembly.screenshot({
     path: "output/playground/ink-contact-magnet.png",
     fullPage: true,
@@ -1235,14 +1370,14 @@ try {
     Math.abs(
       inkState.characters.find((object) => object.char === "心").tile.center.x -
         heartTileBefore.center.x,
-    ) < 0.1,
-    "the source tile stays effectively anchored during an ink-led recombination",
+    ) > 1,
+    "dragging terminal ink moves its tile as one object",
   );
   inkState = await guideHeldHeartIntoPlace(inkReassembly, inkBox, inkState);
   assert.deepEqual(
     inkState.characters.map((object) => object.char),
     ["想"],
-    "dragging 心 strokes onto 相 guides them into 想 without moving its tile",
+    "dragging terminal 心 ink moves the tile and recombines it into 想",
   );
   await inkReassembly.mouse.up();
   await inkReassembly.close();
@@ -1263,7 +1398,11 @@ try {
     current.characters.map((object) => object.char),
     ["木", "目"],
   );
-  assertNoTileOverlap(current.characters, "horizontal 相 tear");
+  assertSiblingFacesSeparate(
+    current.characters.find((object) => object.char === "木"),
+    current.characters.find((object) => object.char === "目"),
+    "horizontal 相 tear siblings",
+  );
   assertTilesInsideBoard(current.characters, box, "horizontal 相 tear");
   assert.equal(
     current.magnet.active,
@@ -1272,7 +1411,7 @@ try {
   );
   await page.mouse.up();
 
-  // Reset to 想, wait for tile clearance, then reassemble by gripping 相's tile.
+  // Reset to 想, split as soon as child faces clear each other, then reassemble by gripping 相's tile.
   await page.getByRole("button", { name: "想", exact: true }).click();
   current = await state();
   const originalCenter = current.pose;
@@ -1281,24 +1420,17 @@ try {
   const xiangOrigin = screenPoint(box, xiangPoint);
   await page.mouse.move(xiangOrigin.x, xiangOrigin.y);
   await page.mouse.down();
-  for (let i = 1; i <= 12; i++) {
-    await page.mouse.move(xiangOrigin.x + i * 9, xiangOrigin.y);
-    await advance(page, 1000 / 60);
-  }
-  current = await state();
-  assert.equal(current.phase, "stretching");
-  assert.equal(current.tearing.readyForTiles, false);
-  assert.deepEqual(
-    current.characters.map((object) => object.char),
-    ["想"],
-  );
-  for (let i = 13; i <= 35 && current.phase === "stretching"; i++) {
+  for (let i = 1; i <= 40 && current.phase !== "loose"; i++) {
     await page.mouse.move(xiangOrigin.x + i * 9, xiangOrigin.y);
     await advance(page, 1000 / 60);
     current = await state();
   }
   assert.equal(current.phase, "loose");
-  assertNoTileOverlap(current.characters, "想 tear");
+  assertSiblingFacesSeparate(
+    current.characters.find((object) => object.char === "相"),
+    current.characters.find((object) => object.char === "心"),
+    "想 tear siblings",
+  );
   assertTilesInsideBoard(current.characters, box, "想 tear");
   assert.deepEqual(
     current.characters.map((object) => object.char),
@@ -1406,7 +1538,7 @@ try {
   await advance(page, 6000);
   assert.equal((await state()).contactCount, 0);
 
-  // A weighted parent gives way under the same light pull; detached pieces remain free.
+  // Weighted mode keeps the unpulled component anchored during a tear.
   await page.locator('input[name="physics-mode"][value="weighted"]').check();
   await page.getByRole("button", { name: "明", exact: true }).click();
   current = await state();
@@ -1420,7 +1552,8 @@ try {
     Math.hypot(
       current.pose.x - weightedStart.x,
       current.pose.y - weightedStart.y,
-    ) > 1,
+    ) < 0.1,
+    "the unpulled component stays anchored even in Weighted mode",
   );
   await page.mouse.up();
   await page.locator('input[name="physics-mode"][value="fixed"]').check();
@@ -1501,6 +1634,7 @@ try {
     (object) => object.char === "心",
   );
   const heartTileHome = { ...looseHeart.tile.center };
+  const heartInkHome = { ...looseHeart.center };
   const heartGrab = looseHeart.grabPoints.reduce((farthest, point) =>
     Math.hypot(point.x - looseHeart.center.x, point.y - looseHeart.center.y) >
     Math.hypot(
@@ -1522,15 +1656,29 @@ try {
   const pulledHeart = restoredState.characters.find(
     (object) => object.char === "心",
   );
-  const pulledDistance = Math.hypot(
-    pulledHeart.center.x - pulledHeart.tile.center.x,
-    pulledHeart.center.y - pulledHeart.tile.center.y,
+  assert.equal(
+    restoredState.activeContacts[0]?.interaction,
+    "tile",
+    "dragging an unsupported 心 stroke moves the entire tile",
   );
-  const pulledAngle = Math.abs(
-    pulledHeart.center.angle - pulledHeart.tile.center.angle,
+  assert.ok(
+    Math.hypot(
+      pulledHeart.tile.center.x - heartTileHome.x,
+      pulledHeart.tile.center.y - heartTileHome.y,
+    ) > 1,
+    "the whole 心 tile follows its stroke drag",
   );
-  assert.ok(pulledDistance > 1);
-  assert.ok(pulledAngle > 0.01);
+  assert.ok(
+    Math.hypot(
+      pulledHeart.center.x -
+        heartInkHome.x -
+        (pulledHeart.tile.center.x - heartTileHome.x),
+      pulledHeart.center.y -
+        heartInkHome.y -
+        (pulledHeart.tile.center.y - heartTileHome.y),
+    ) < 8,
+    "the terminal character's ink stays attached to its moving tile",
+  );
   assert.equal(restoredState.magnet.active, false);
   await restoration.screenshot({
     path: "output/playground/ink-pulled-from-tile.png",
@@ -1544,23 +1692,18 @@ try {
   );
   assert.ok(
     Math.hypot(
-      settledHeart.center.x - settledHeart.tile.center.x,
-      settledHeart.center.y - settledHeart.tile.center.y,
-    ) <
-      pulledDistance * 0.5,
-    "a released non-combining character settles back onto its tile",
+      settledHeart.center.x -
+        settledHeart.tile.center.x -
+        (heartInkHome.x - heartTileHome.x),
+      settledHeart.center.y -
+        settledHeart.tile.center.y -
+        (heartInkHome.y - heartTileHome.y),
+    ) < 8,
+    "the terminal character remains attached after release",
   );
   assert.ok(
-    Math.abs(settledHeart.center.angle - settledHeart.tile.center.angle) <
-      pulledAngle,
-    "released strokes settle back to the tile orientation",
-  );
-  assert.ok(
-    Math.hypot(
-      settledHeart.tile.center.x - heartTileHome.x,
-      settledHeart.tile.center.y - heartTileHome.y,
-    ) < 0.02,
-    "the restoring ink force leaves the tile itself anchored",
+    Math.abs(settledHeart.center.angle - settledHeart.tile.center.angle) < 0.01,
+    "the terminal character keeps its tile orientation",
   );
   await restoration.screenshot({
     path: "output/playground/ink-returned-to-tile.png",
@@ -1597,6 +1740,57 @@ try {
   });
   await mobile.getByRole("button", { name: "Five starters" }).click();
   assert.equal((await state(mobile)).characters.length, 5);
+  // In the two-column phone layout, 想 and its neighboring 相 tile are close
+  // enough that a newly detached 相 face will overlap the existing tile.
+  let crowded = await state(mobile);
+  await mobile.locator("canvas").scrollIntoViewIfNeeded();
+  const crowdedBox = await mobile.locator("canvas").boundingBox();
+  const crowdedSource = crowded.characters.find(
+    (object) => object.char === "想",
+  );
+  const crowdedNeighbor = crowded.characters.find(
+    (object) => object.char === "相",
+  );
+  const crowdedOrigin = screenPoint(
+    crowdedBox,
+    crowded.componentGrabPoints["相"][5],
+  );
+  await mobile.mouse.move(crowdedOrigin.x, crowdedOrigin.y);
+  await mobile.mouse.down();
+  for (let i = 1; i <= 50; i++) {
+    await mobile.mouse.move(crowdedOrigin.x + i * 8, crowdedOrigin.y);
+    await advance(mobile, 1000 / 60);
+    crowded = await state(mobile);
+    if (crowded.phase === "loose") break;
+  }
+  assert.equal(crowded.phase, "loose");
+  const crowdedFreeXiang = crowded.characters.find(
+    (object) => object.char === "相" && object.free,
+  );
+  const crowdedHeart = crowded.characters.find(
+    (object) => object.char === "心" && object.free,
+  );
+  assertSiblingFacesSeparate(
+    crowdedFreeXiang,
+    crowdedHeart,
+    "crowded starter tear siblings",
+  );
+  assert.ok(
+    getFaceOverlap(crowdedFreeXiang, crowdedNeighbor).x > 0 &&
+      getFaceOverlap(crowdedFreeXiang, crowdedNeighbor).y > 0,
+    "a child tile is created at source clearance even while it overlaps an unrelated existing tile",
+  );
+  assert.ok(
+    crowded.characters.some((object) => object.id === crowdedNeighbor.id),
+    "the unrelated neighboring tile remains present after the tear",
+  );
+  assert.ok(
+    !crowded.characters.some((object) => object.id === crowdedSource.id),
+    "the source character is replaced by its two component tiles",
+  );
+  await mobile.mouse.up();
+  await mobile.getByRole("button", { name: "Five starters" }).click();
+  assert.equal((await state(mobile)).characters.length, 5);
   await mobile.getByRole("button", { name: "想", exact: true }).click();
   assert.equal((await state(mobile)).reducedMotion, true);
   await mobile.getByLabel("Reduce motion").uncheck();
@@ -1630,7 +1824,7 @@ try {
   });
   touched = await state(mobile);
   assert.equal(touched.contactCount, 2);
-  assert.ok(touched.tearing?.tetherCount > 0);
+  assert.equal(touched.tearing?.tetherCount, 0);
   const third = touch(touched.componentGrabPoints["相"][7], 43);
   const fourth = touch(touched.componentGrabPoints["心"][2], 71);
   await cdp.send("Input.dispatchTouchEvent", {
@@ -1667,7 +1861,11 @@ try {
     }),
   );
   assert.equal(touched.contactCount, 4);
-  assertNoTileOverlap(touched.characters, "multitouch tear");
+  assertSiblingFacesSeparate(
+    touched.characters.find((object) => object.char === "相"),
+    touched.characters.find((object) => object.char === "心"),
+    "multitouch tear siblings",
+  );
   assertTilesInsideBoard(touched.characters, mobileBox, "multitouch tear");
   assert.deepEqual(
     touched.characters.map((object) => object.char),
@@ -1803,19 +2001,33 @@ try {
     ),
   );
   woodState = await state(woodLab);
+  const originalWoodId = woodState.characters.find(
+    (object) => object.char === "木",
+  ).id;
   woodState = await tearComponent(woodLab, woodBox, woodState, "林", "木");
   assert.deepEqual(
     woodState.characters.map((object) => object.char).sort(),
     ["木", "木", "木"],
     "林 tears into its two mapped 木 components",
   );
-  assertNoTileOverlap(woodState.characters, "three tree pieces");
+  const nestedWoodIds = new Set(
+    woodState.characters
+      .filter((object) => object.char === "木" && object.id !== originalWoodId)
+      .map((object) => object.id),
+  );
+  assert.equal(nestedWoodIds.size, 2);
+  const nestedWoods = woodState.characters.filter((object) =>
+    nestedWoodIds.has(object.id),
+  );
+  assertSiblingFacesSeparate(
+    nestedWoods[0],
+    nestedWoods[1],
+    "林 tear sibling faces",
+  );
   await woodLab.mouse.up();
   woodState = await state(woodLab);
   const lowerWoods = woodState.characters
-    .filter((object) => object.char === "木")
-    .sort((a, b) => b.tile.center.y - a.tile.center.y)
-    .slice(0, 2)
+    .filter((object) => nestedWoodIds.has(object.id))
     .sort((a, b) => a.tile.center.x - b.tile.center.x);
   assert.equal(lowerWoods.length, 2);
   const leftWood = lowerWoods[0];
@@ -1893,6 +2105,138 @@ try {
   await woodLab.mouse.up();
   await woodLab.close();
 
+  const toolsPage = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  await load(toolsPage);
+  let toolsState = await state(toolsPage);
+  await toolsPage.getByLabel("Arrange mode").selectOption("all-at-once");
+  await toolsPage.getByRole("button", { name: "Arrange tiles" }).click();
+  assert.equal((await state(toolsPage)).animatingTiles, true);
+  await advance(toolsPage, 1200);
+  toolsState = await state(toolsPage);
+  assert.equal(toolsState.animatingTiles, false);
+  assertNoTileOverlap(toolsState.characters, "arranged grid");
+  assert.ok(
+    Math.abs(toolsState.characters[0].tile.center.x - 90) < 1 &&
+      Math.abs(toolsState.characters[0].tile.center.y - 90) < 1,
+    "arrange fills the grid from the top-left",
+  );
+  await toolsPage.screenshot({
+    path: "output/playground/arranged-grid.png",
+    fullPage: true,
+  });
+
+  await toolsPage.getByRole("button", { name: "Reset" }).click();
+  const beforeSequential = await state(toolsPage);
+  await toolsPage.getByLabel("Arrange mode").selectOption("one-by-one");
+  await toolsPage.getByRole("button", { name: "Arrange tiles" }).click();
+  await advance(toolsPage, 180);
+  const duringSequential = await state(toolsPage);
+  assert.equal(duringSequential.animatingTiles, true);
+  assert.ok(
+    Math.hypot(
+      duringSequential.characters[0].tile.center.x -
+        beforeSequential.characters[0].tile.center.x,
+      duringSequential.characters[0].tile.center.y -
+        beforeSequential.characters[0].tile.center.y,
+    ) > 1,
+    "the first tile starts moving immediately",
+  );
+  assert.deepEqual(
+    duringSequential.characters[1].tile.center,
+    beforeSequential.characters[1].tile.center,
+    "later tiles wait for the one-at-a-time animation",
+  );
+  await advance(toolsPage, 1800);
+  assert.equal((await state(toolsPage)).animatingTiles, false);
+
+  await toolsPage.getByRole("button", { name: "Reset" }).click();
+  await toolsPage.getByLabel("Arrange mode").selectOption("by-component");
+  await toolsPage.getByRole("button", { name: "Arrange tiles" }).click();
+  await advance(toolsPage, 1800);
+  toolsState = await state(toolsPage);
+  const componentOrder = [...toolsState.characters]
+    .sort(
+      (a, b) =>
+        Math.round(a.tile.center.y) - Math.round(b.tile.center.y) ||
+        Math.round(a.tile.center.x) - Math.round(b.tile.center.x),
+    )
+    .map((object) => object.char);
+  assert.equal(
+    Math.abs(componentOrder.indexOf("相") - componentOrder.indexOf("休")),
+    1,
+    "tiles that share 木 as a component are placed next to each other",
+  );
+
+  await toolsPage.getByRole("button", { name: "Reset" }).click();
+  await toolsPage
+    .getByRole("checkbox", { name: "Snap to grid when released" })
+    .check();
+  toolsState = await state(toolsPage);
+  const toolsBox = await toolsPage.locator("canvas").boundingBox();
+  assert.ok(toolsBox);
+  await dragTileFace(toolsPage, toolsBox, toolsState, "想", {
+    x:
+      toolsState.characters.find((object) => object.char === "想").tile.center
+        .x + 65,
+    y:
+      toolsState.characters.find((object) => object.char === "想").tile.center
+        .y + 45,
+  });
+  await toolsPage.mouse.up();
+  assert.equal((await state(toolsPage)).animatingTiles, true);
+  await advance(toolsPage, 700);
+  toolsState = await state(toolsPage);
+  assert.equal(toolsState.snapToGrid, true);
+  assert.equal(toolsState.animatingTiles, false);
+  assertNoTileOverlap(toolsState.characters, "snap-to-grid release");
+  await toolsPage.screenshot({
+    path: "output/playground/snap-to-grid.png",
+    fullPage: true,
+  });
+  await toolsPage.close();
+
+  const hintPage = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  await load(hintPage);
+  const hintBox = await hintPage.locator("canvas").boundingBox();
+  assert.ok(hintBox);
+  const hintInitial = await state(hintPage);
+  await doubleTapTile(hintPage, hintBox, hintInitial, "想");
+  await hintPage.waitForFunction(() => {
+    const game = JSON.parse(window.render_game_to_text());
+    return (
+      game.characters.some((object) => object.char === "相") &&
+      game.characters.some((object) => object.char === "心")
+    );
+  });
+  await hintPage
+    .getByRole("button", { name: "Highlight compatible tiles" })
+    .click();
+  const hinted = await state(hintPage);
+  const compatibleHeartTile = hinted.characters.find(
+    (object) => object.char === "心",
+  );
+  assert.ok(compatibleHeartTile);
+  assert.ok(
+    hinted.highlightedTileIds.includes(compatibleHeartTile.id),
+    "hints highlight the compatible 心 tile for focused 相",
+  );
+  assert.equal(
+    await hintPage
+      .getByRole("status")
+      .filter({ hasText: "compatible tiles highlighted" })
+      .count(),
+    1,
+  );
+  await hintPage.screenshot({
+    path: "output/playground/compatible-tile-hint.png",
+    fullPage: true,
+  });
+  await hintPage.close();
+
   // Failed scene data has a retry path.
   const failure = await browser.newPage();
   await failure.route("**/data/playground/scene.json", (route) =>
@@ -1911,7 +2255,7 @@ try {
   await page.getByRole("button", { name: "Split 想", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Playground passed: bounded one-step asset preloading and early composition candidates, normalized glyph size, pronunciation/definition focus and tear feedback, double-tap unfolding, tile repulsion, arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped/silk rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
+    "Playground passed: bounded one-step asset preloading and early composition candidates, normalized glyph size, pronunciation/definition focus and tear feedback, double-tap unfolding, tile repulsion, arbitrary dictionary selection, dynamic cross-source composition, flat/raised/draped/silk rendering and hit testing, fixed/weighted response, tile-aligned ink restoration, safe early release, recursive tears and scale-preserving reassembly, four simultaneous contacts, tile- and ink-contact-gated magnetic pull/distortion/snap, one-at-a-time and all-at-once tile arrangement, shared-component grouping, optional grid snapping, compatible-tile hints, reversed-layout rejection, reduced motion, resize, loading recovery, and game navigation.",
   );
 } finally {
   await browser.close();

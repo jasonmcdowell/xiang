@@ -513,7 +513,8 @@
 }
 
 .modePicker,
-.stylePicker {
+.stylePicker,
+.tileTools {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -547,8 +548,59 @@
 
 .modePicker input,
 .stylePicker input,
+.tileToolCheck input,
 .footer input {
   accent-color: #486853;
+}
+
+.tileTools {
+  display: grid;
+  gap: 8px;
+}
+
+.tileTools select,
+.tileTools button {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 42%);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+}
+
+.tileTools button {
+  background: #e9edde;
+  cursor: pointer;
+}
+
+.tileTools button:hover:not(:disabled) {
+  border-color: #486853;
+  background: #e0e6d7;
+}
+
+.tileTools button:disabled,
+.tileTools select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tileToolCheck {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.tileToolStatus {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+  margin: 0;
 }
 
 .controls {

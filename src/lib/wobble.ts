@@ -287,6 +287,22 @@ export class WobbleBody {
     }
     this.fixedCenter = { x, y };
   }
+  setPose(target: { x: number; y: number; angle: number }) {
+    const current = this.pose();
+    const angle = angleDelta(target.angle - current.angle);
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    for (const node of this.nodes) {
+      const dx = node.x - current.x;
+      const dy = node.y - current.y;
+      node.x = target.x + c * dx - s * dy;
+      node.y = target.y + s * dx + c * dy;
+      node.vx = 0;
+      node.vy = 0;
+    }
+    this.fixedCenter = { x: target.x, y: target.y };
+    this.holdFixedCenter();
+  }
   translate(dx: number, dy: number) {
     if (!dx && !dy) return;
     const pose = this.pose();
