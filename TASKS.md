@@ -186,3 +186,11 @@ Acceptance: tests cover 100 seeded starts, timer rewards, repeated discovery, pa
 - [x] Add square Go-inspired cell boards whose grid centers match tile placement; scale all physical tiles uniformly to fit each selected grid.
 - [x] Reuse physical decomposition and composition; count every new off-collection character observed on the board for the duration of the run.
 - [x] Verify scoring/history, capacity end conditions, timed arrivals, dynamic glyph loading, tab switching, mobile layout, and reduced motion in unit and browser checks.
+
+## Follow-up — Shared playful tile actions
+
+- [x] Add Blast and Shuffle actions to both Playground tabs, with synthesized click-clack feedback for shuffling.
+- [x] Add a keep-arranged setting that reapplies the chosen arrangement after any tile-adding transformation or arrival.
+- [x] Raise a whole tile to the front while and after it is dragged, and replace the tear sound with a rising bubble-pop.
+- [x] Add a Traditional/Simplified tile-writing toggle to the main games and both Playground games, separate from interface language.
+- [x] Verify tile actions, automatic arrangement, overlap ordering, audio, both writing systems, and deployment in browser checks.

@@ -25,6 +25,10 @@ try {
   );
   await page.getByRole("tab", { name: "Discovery Run" }).click();
   await page.locator("#discovery-capacity").selectOption("9");
+  await page
+    .getByRole("checkbox", { name: "Keep arranged" })
+    .check();
+  await page.locator("#discovery-arrange-mode").selectOption("all-at-once");
 
   const boardSize = await page.locator("canvas").boundingBox();
   assert.ok(boardSize);
@@ -32,6 +36,8 @@ try {
     name: "Start Discovery Run",
   });
   await startButton.waitFor();
+  await page.getByRole("button", { name: "Blast!" }).waitFor();
+  await page.getByRole("button", { name: "Shuffle" }).waitFor();
   // Fix the initial shuffle to 相 so this browser check exercises a known
   // recipe whose 木 and 目 children are both outside the draw collection.
   await page.evaluate(() => {
@@ -101,6 +107,18 @@ try {
   await advance(10_000);
   await page.waitForFunction(
     () => JSON.parse(window.render_game_to_text()).discoveryRun?.delivered === 2,
+  );
+  game = await state();
+  const nextCellCenter = {
+    x: expectedCenter.x + (square * 0.88) / 3,
+    y: expectedCenter.y,
+  };
+  assert.ok(
+    Math.hypot(
+      game.characters[1].tile.center.x - nextCellCenter.x,
+      game.characters[1].tile.center.y - nextCellCenter.y,
+    ) < 0.01,
+    "keep-arranged preserves the row-major cell layout for delivered tiles",
   );
 
   for (let attempt = 0; attempt < 8; attempt++) {

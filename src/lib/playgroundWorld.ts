@@ -118,6 +118,8 @@ type TileMove = {
   target: Point;
   delay: number;
   duration: number;
+  arc?: number;
+  targetAngle?: number;
 };
 
 const clamp = (value: number, low: number, high: number) =>
@@ -141,6 +143,7 @@ export class PlaygroundWorld {
   private recipes: Recipe[] = [];
   private recipeByChar = new Map<string, Recipe>();
   private objects: SceneObject[] = [];
+  private frontTileId: number | null = null;
   private customStarts: StartingTile[] | null = null;
   private preview: TearPreview | null = null;
   private contacts = new Map<number, Contact>();
@@ -271,6 +274,29 @@ export class PlaygroundWorld {
 
   charactersOnBoard() {
     return this.objects.map((object) => object.char);
+  }
+
+  convertCharacters(characterMap: Record<string, string>) {
+    if (this.isManipulating || this.isAnimatingTiles) return false;
+    const convertWhenLoaded = (character: string) => {
+      const candidate = characterMap[character] ?? character;
+      return this.assets.glyphs[candidate] ? candidate : character;
+    };
+    for (const object of this.objects) {
+      const character = convertWhenLoaded(object.char);
+      if (character === object.char) continue;
+      object.char = character;
+      object.ink = skinStrokes(this.assets.glyphs[character], object.body);
+      object.recipe = this.recipeByChar.get(character) ?? null;
+    }
+    this.selectedCharacter = convertWhenLoaded(this.selectedCharacter);
+    if (this.customStarts)
+      this.customStarts = this.customStarts.map((start) => ({
+        ...start,
+        char: convertWhenLoaded(start.char),
+      }));
+    this.events.length = 0;
+    return true;
   }
 
   hasRecipeFor(character: string) {
@@ -459,6 +485,78 @@ export class PlaygroundWorld {
       delay: mode === "all-at-once" ? 0 : index * delay,
       duration,
     }));
+    return this.startTileAnimation(moves);
+  }
+
+  blastTiles(random: () => number = Math.random) {
+    if (this.contacts.size || this.preview || this.tileAnimation) return false;
+    if (!this.objects.length) return false;
+    const half = this.tileFaceSize / 2 + 24;
+    const minX = Math.min(half, this.width / 2);
+    const maxX = Math.max(this.width - half, this.width / 2);
+    const minY = Math.min(half, this.height / 2);
+    const maxY = Math.max(this.height - half, this.height / 2);
+    const moves = this.objects.map((object) => ({
+      object,
+      fromInk: object.body.pose(),
+      fromTile: object.surfaceBody.pose(),
+      target: {
+        x: minX + random() * (maxX - minX),
+        y: minY + random() * (maxY - minY),
+      },
+      delay: random() * 0.16,
+      duration: 0.42 + random() * 0.24,
+      targetAngle: (random() - 0.5) * 0.16,
+      arc: 8 + random() * 12,
+    }));
+    return this.startTileAnimation(moves);
+  }
+
+  shuffleTiles(random: () => number = Math.random) {
+    if (this.contacts.size || this.preview || this.tileAnimation) return false;
+    if (this.objects.length < 2) return false;
+    const slots = this.gridCenters(
+      this.cellBoard?.capacity ?? this.objects.length,
+    );
+    for (let index = slots.length - 1; index > 0; index--) {
+      const other = Math.floor(random() * (index + 1));
+      [slots[index], slots[other]] = [slots[other], slots[index]];
+    }
+    if (
+      this.objects.every((object, index) => {
+        const pose = object.surfaceBody.pose();
+        return Math.hypot(pose.x - slots[index].x, pose.y - slots[index].y) < 1;
+      })
+    )
+      slots.push(slots.shift()!);
+    const moves = this.objects.map((object, index) => ({
+      object,
+      fromInk: object.body.pose(),
+      fromTile: object.surfaceBody.pose(),
+      target: slots[index],
+      delay: index * 0.045,
+      duration: 0.54 + random() * 0.08,
+      targetAngle: (random() - 0.5) * 0.1,
+      arc: 12 + random() * 10,
+    }));
+    return this.startTileAnimation(moves);
+  }
+
+  private startTileAnimation(moves: TileMove[]) {
+    if (
+      moves.every((move) => {
+        const targetAngle = move.targetAngle ?? 0;
+        const ink = move.fromInk;
+        const tile = move.fromTile;
+        return (
+          Math.hypot(ink.x - move.target.x, ink.y - move.target.y) < 0.1 &&
+          Math.hypot(tile.x - move.target.x, tile.y - move.target.y) < 0.1 &&
+          Math.abs(ink.angle - targetAngle) < 0.001 &&
+          Math.abs(tile.angle - targetAngle) < 0.001
+        );
+      })
+    )
+      return true;
     if (this.reduced) {
       for (const move of moves) this.applyTilePose(move, 1);
       return true;
@@ -575,10 +673,23 @@ export class PlaygroundWorld {
 
   private applyTilePose(move: TileMove, progress: number) {
     const eased = progress * progress * (3 - 2 * progress);
+    const fromY = move.fromTile.y;
+    const topClearance =
+      Math.min(fromY, move.target.y) - this.tileFaceSize / 2 - 12;
+    const bottomClearance =
+      this.height - this.tileFaceSize / 2 - 12 - Math.max(fromY, move.target.y);
+    const direction = topClearance >= bottomClearance ? -1 : 1;
+    const arc =
+      direction *
+      Math.sin(progress * Math.PI) *
+      Math.min(
+        move.arc ?? 0,
+        Math.max(0, Math.max(topClearance, bottomClearance)),
+      );
     const poseAt = (from: ReturnType<WobbleBody["pose"]>) => ({
       x: from.x + (move.target.x - from.x) * eased,
-      y: from.y + (move.target.y - from.y) * eased,
-      angle: from.angle * (1 - eased),
+      y: from.y + (move.target.y - from.y) * eased + arc,
+      angle: from.angle * (1 - eased) + (move.targetAngle ?? 0) * eased,
     });
     move.object.body.setPose(poseAt(move.fromInk));
     move.object.surfaceBody.setPose(poseAt(move.fromTile));
@@ -1114,7 +1225,7 @@ export class PlaygroundWorld {
       } else return false;
       entityId = this.preview.source.id;
     } else {
-      for (const object of [...this.objects].reverse()) {
+      for (const object of [...this.objectsInZOrder()].reverse()) {
         surfaceBody = object.surfaceBody;
         const onInk = this.containsInk(
           point,
@@ -1167,6 +1278,7 @@ export class PlaygroundWorld {
       ? surfaceBody.startWholeDrag(point, pointerId)
       : body.start(point, pointerId);
     if (tileGrip) body.setVelocity(0, 0);
+    if (tileGrip) this.frontTileId = entityId;
     this.contacts.set(pointerId, {
       entityId,
       group,
@@ -2053,7 +2165,7 @@ export class PlaygroundWorld {
 
   layers(): InkLayer[] {
     const preview = this.preview;
-    return this.objects.flatMap((object) => {
+    return this.objectsInZOrder().flatMap((object) => {
       if (!preview || object !== preview.source)
         return [
           {
@@ -2084,6 +2196,19 @@ export class PlaygroundWorld {
         },
       ];
     });
+  }
+
+  private objectsInZOrder() {
+    if (this.frontTileId === null) return this.objects;
+    const frontIndex = this.objects.findIndex(
+      (object) => object.id === this.frontTileId,
+    );
+    if (frontIndex < 0 || frontIndex === this.objects.length - 1)
+      return this.objects;
+    return [
+      ...this.objects.filter((object) => object.id !== this.frontTileId),
+      this.objects[frontIndex],
+    ];
   }
 
   connections() {

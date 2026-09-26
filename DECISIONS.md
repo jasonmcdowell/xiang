@@ -514,3 +514,19 @@ This file records key product/engineering decisions and the intent behind them. 
 **Why:** This adds an endurance game loop that rewards continued decomposition and recombination while preserving the physics lab's open-ended use. Counting discovered characters historically makes exploration valuable even if a player later recombines those pieces.
 
 **Consequences:** Discovery Run state is session-only. Its board layout, draw collection, and score are independent of the Playground controls and board material. The draw collection determines whether a character is a discovery; all character rules and physical assets remain dynamically loaded from the existing local static data. If no valid character fits a required asset load, the arrival is retried without counting a tile.
+
+## D-059 — Add playful board actions and persistent arrangement to Playground games
+
+**Decision (2026-09-26):** Both Playground tabs expose **Blast!**, **Shuffle**, Arrange mode, and **Keep arranged**. Blast sends each tile to an independently randomized in-board position. Shuffle animates tiles along short lifted arcs into shuffled board slots and plays a short sequence of synthesized wooden click-clacks. Keep arranged reapplies the selected arrangement whenever a tear, unfold, composition, manual addition, or timed arrival changes the tile set; if a tile is still held, wait until release. Bring a whole tile to the front of the draw and hit-test order as soon as it is grabbed, and leave it in front after release. Replace the descending tear tone with a sharp attack and a short rising bubble chirp.
+
+**Why:** These actions help players explore tile combinations in both the free-form lab and the survival game, keep an expanding board legible, and make moving or separating tiles feel responsive. A clear topmost dragged tile prevents overlapping faces from hiding the user's active target.
+
+**Consequences:** Blast may create temporary or final overlaps; players can use Arrange to restore regular spacing. Shuffle uses distinct grid positions so tiles do not overlap at rest. Tile animations pause physics and direct interaction until complete, and reduced motion applies them immediately. New sounds are synthesized with Web Audio and require the usual user gesture to unlock playback.
+
+## D-060 — Switch tile writing system independently of interface language
+
+**Decision (2026-09-26):** Add a Simplified/Traditional tile-writing selector to the main Explore and Timed Challenge games and to both Playground tabs. It is independent of the existing English/Traditional Chinese/Simplified Chinese interface-language selector. Changing the selector preserves the current board, tile identities, positions, score, and undo history while converting visible character forms and rebuilding decomposition/composition indices for the selected script. Generate one-character mappings at build time from OpenCC; Playground mappings additionally require a local outline for the destination character. If a converted Playground tile would lose an existing supported physical recipe, keep that tile in its original form rather than silently removing its interaction. Store the mapping as a static asset and cache it in the browser; do not load OpenCC at runtime.
+
+**Why:** Players should be able to explore the same game in either writing system without treating a language setting as a character-data setting or resetting a live board.
+
+**Consequences:** Character-by-character conversion is necessarily context-free, so some characters with multiple lexical or regional forms may remain unchanged or use OpenCC's default mapping. The mapping files and their MIT and Apache 2.0 notices are generated alongside Playground assets. New character assets remain lazily fetched as the board needs them.

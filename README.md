@@ -51,7 +51,7 @@ npm run test:motion     # Flight paths, cancellation, reduced motion, tray unfol
 npm run test:recipes    # Mixed three-piece recipes, all eight round trips, mobile and inspector
 npm run test:playground # Tear, nested tear, magnetic alignment, two physics modes and multitouch
 npm run test:discovery # Discovery Run timing, scoring, cell placement, pause and game over
-npm run test:language  # English/Traditional/Simplified UI, dynamic messages, persistence and routes
+npm run test:language  # interface language, tile writing systems, persistence and routes
 ```
 
 To test another origin:
@@ -165,6 +165,10 @@ Use **Surface style** to compare Flat, Raised, Draped, and Silk rendering. Raise
 Choose a **Game board** directly below the canvas to change the tabletop: bamboo, a single slate slab with a rough edge, a full traditional 19×19 Go grid, a compact 9×9 Go grid, or a textured rice-paper scroll. The physics and character tile surface style stay the same across boards; Bamboo table is selected initially. The board illustrations are SVG in `src/app/playground/PlaygroundBoard.tsx` and sit beneath the transparent character canvas.
 
 Use **Arrange tiles** to animate the board into a top-left, row-major grid. Choose one-at-a-time or all-at-once motion, or group tiles whose immediate recipes share components before laying them out. **Snap to grid when released** is optional; when enabled, a whole-tile drag or newly detached component settles into the nearest open grid cell unless it is already composing. Select a loose tile and choose **Highlight compatible tiles** to outline every currently compatible loose partner; changing the focused tile clears the hints.
+
+Both Playground tabs also have **Blast!**, which sends tiles to randomized board positions, and **Shuffle**, which swishes tiles between board spaces with synthesized click-clack sounds. Select an arrange mode and enable **Keep arranged** to rerun it whenever a tear, unfold, composition, manual addition, or timed arrival adds tiles. Dragging a whole tile brings it in front of overlapping tiles and keeps it there when released. Successful tears use a crisp, rising bubble-pop sound. The Playground also offers a Traditional/Simplified character display toggle; it is separate from the English/Traditional Chinese/Simplified Chinese interface-language picker.
+
+The **Tile writing** selector also appears in the main Explore and Timed Challenge games. Switching scripts preserves the active game and rebuilds its composition and decomposition indices. The build-time OpenCC conversion map is served as `public/data/playground/variants.json`; Playground entries are limited to characters with local outlines, and a character keeps its current form if changing it would remove an available physical tear recipe. OpenCC notices are in `public/data/licenses/OPENCC-MIT.txt` and `public/data/licenses/OPENCC-APACHE-2.0.txt`. `npm run build:playground` regenerates the per-character assets, HSK 1 catalog, script maps, and attribution files from the local Make Me a Hanzi inputs.
 
 **Weighted** is selected by default, so a blank-face drag moves the whole tile with resistance and inertia; detached pieces remain easier to move. **Fixed** is available for experiments that pin the tile's centroid while the ink flexes and mapped pieces can still be pulled off. During a tear, the original tile and its remaining strokes stay still; once separated, the component's new tile follows the held strokes. Mouse, pen, and touch share Pointer Events input, with each contact tracked independently and no app-level finger-count cap. Adjust Softness, nudge, or reset from the controls. Focus the canvas for arrow-key nudges, R to reset, F for fullscreen, and Escape to release grabs. Reduced motion starts from the system preference and keeps the ink rigid while preserving direct manipulation.
 

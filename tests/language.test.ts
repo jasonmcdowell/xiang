@@ -6,6 +6,11 @@ test("language catalogs keep English as fallback and distinguish both scripts", 
   assert.equal(translate("en", "Your character board"), "Your character board");
   assert.equal(translate("zh-Hant", "Your character board"), "你的漢字區");
   assert.equal(translate("zh-Hans", "Your character board"), "你的汉字区");
+  assert.equal(translate("zh-Hant", "Blast!"), "炸散字牌！");
+  assert.equal(translate("zh-Hans", "Shuffle"), "洗牌");
+  assert.equal(translate("zh-Hant", "Keep arranged"), "保持排列");
+  assert.equal(translate("zh-Hant", "Traditional tiles"), "繁體字牌");
+  assert.equal(translate("zh-Hans", "Simplified tiles"), "简体字牌");
   assert.equal(translate("zh-Hant", "Uncatalogued copy"), "Uncatalogued copy");
 });
 

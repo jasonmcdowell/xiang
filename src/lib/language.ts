@@ -3,6 +3,9 @@ export type SiteLanguage = "en" | "zh-Hant" | "zh-Hans";
 const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
   "zh-Hant": {
     Language: "語言",
+    "Tile writing": "字牌字體",
+    "Simplified tiles": "簡體字牌",
+    "Traditional tiles": "繁體字牌",
     "Xiang 想 — A little character play": "Xiang 想 — 漢字小玩意",
     "Character physics lab — Xiang playground": "漢字物理實驗室 — Xiang 遊樂場",
     "Dictionary lab — Xiang": "字典實驗室 — Xiang",
@@ -244,6 +247,11 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Tile tools": "字牌工具",
     "Arrange mode": "排列方式",
     "Arrange tiles": "排列字牌",
+    "Blast!": "炸散字牌！",
+    Shuffle: "洗牌",
+    "Keep arranged": "保持排列",
+    "Re-run this arrange mode whenever new tiles are added.":
+      "新增字牌時，重新套用此排列方式。",
     "One at a time": "逐一移動",
     "All at once": "同時移動",
     "Group by shared components": "依共用部件分組",
@@ -431,6 +439,9 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
       "本回合開始。每 10 秒會出現一個新漢字。",
   },
   "zh-Hans": {
+    "Tile writing": "字牌字体",
+    "Simplified tiles": "简体字牌",
+    "Traditional tiles": "繁体字牌",
     "Main navigation": "主选单",
     "Xiang home": "Xiang 首页",
     Split: "拆解",
@@ -672,6 +683,11 @@ const copy: Record<Exclude<SiteLanguage, "en">, Record<string, string>> = {
     "Tile tools": "字牌工具",
     "Arrange mode": "排列方式",
     "Arrange tiles": "排列字牌",
+    "Blast!": "炸开字牌！",
+    Shuffle: "洗牌",
+    "Keep arranged": "保持排列",
+    "Re-run this arrange mode whenever new tiles are added.":
+      "新增字牌时，重新应用此排列方式。",
     "One at a time": "逐一移动",
     "All at once": "同时移动",
     "Group by shared components": "按共有部件分组",

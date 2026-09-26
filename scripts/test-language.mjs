@@ -22,6 +22,23 @@ try {
   assert.equal(await language.inputValue(), "en");
   assert.equal(await page.locator("html").getAttribute("lang"), "en");
 
+  const writing = page.getByLabel("Tile writing");
+  assert.equal(await writing.inputValue(), "simplified");
+  await page.getByLabel("Tile set").selectOption("4");
+  await writing.selectOption("traditional");
+  await page.waitForFunction(() =>
+    document.querySelector(".board-tiles")?.textContent?.includes("親"),
+  );
+  await writing.selectOption("simplified");
+  await page.waitForFunction(() =>
+    document.querySelector(".board-tiles")?.textContent?.includes("亲"),
+  );
+  await page.getByLabel("Tile set").selectOption("0");
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("xiang-writing-system")),
+    "simplified",
+  );
+
   await language.selectOption("zh-Hant");
   await page.getByRole("heading", { name: "你的漢字區" }).waitFor();
   assert.equal(await page.locator("html").getAttribute("lang"), "zh-Hant");
@@ -64,6 +81,21 @@ try {
   );
   await page.getByRole("heading", { name: "拉开、摆放、重新组合" }).waitFor();
   await page.getByRole("button", { name: "HSK 1 汉字表" }).waitFor();
+  const playgroundWriting = page.locator(".writing-system-picker select");
+  await playgroundWriting.selectOption("traditional");
+  await page.locator("#playground-character").fill("妈");
+  await page.locator("#playground-character").press("Enter");
+  await page.waitForFunction(() =>
+    JSON.parse(window.render_game_to_text()).characters.some(
+      (character) => character.char === "媽",
+    ),
+  );
+  await playgroundWriting.selectOption("simplified");
+  await page.waitForFunction(() =>
+    JSON.parse(window.render_game_to_text()).characters.some(
+      (character) => character.char === "妈",
+    ),
+  );
   await page.screenshot({
     path: `${output}/simplified-playground.png`,
     fullPage: true,

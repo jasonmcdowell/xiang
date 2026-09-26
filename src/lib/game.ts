@@ -30,6 +30,31 @@ export type Action =
   | { type: "add"; char: string }
   | { type: "advance"; ms: number }
   | { type: "start" | "pause" | "resume" | "cancel" | "hint" | "undo" };
+
+export function convertGameStateCharacters(
+  state: GameState,
+  characterMap: Record<string, string>,
+): GameState {
+  const convert = (character: string) => characterMap[character] ?? character;
+  const convertText = (value: string) =>
+    Array.from(value, (character) => convert(character)).join("");
+  return {
+    ...state,
+    board: state.board.map((entry) => ({
+      ...entry,
+      char: convert(entry.char),
+    })),
+    tray: state.tray.map((entry) => ({ ...entry, char: convert(entry.char) })),
+    candidates: state.candidates.map(convert),
+    discovered: state.discovered.map(convert),
+    focused: convert(state.focused),
+    message: convertText(state.message),
+    previous: state.previous
+      ? convertGameStateCharacters(state.previous, characterMap)
+      : null,
+  };
+}
+
 export const CAPACITY = 12;
 const EXPLORE_TRAY_LIMIT = 48;
 export const RECIPES = Array.from(
@@ -101,8 +126,7 @@ export function findCombinableTileIds(
       }
       for (let k = j + 1; k < tray.length; k++) {
         if (
-          composeTiles(data, [tray[i].char, tray[j].char, tray[k].char])
-            .length
+          composeTiles(data, [tray[i].char, tray[j].char, tray[k].char]).length
         ) {
           combinable.add(tray[i].id);
           combinable.add(tray[j].id);
@@ -125,7 +149,8 @@ function tile(state: GameState, char: string): Tile {
   return { id: state.nextId++, char };
 }
 function recipes(data: IndicesData): string[][] {
-  return RECIPES.map((c) => data.decomp[c]).filter((c) => c?.length === 2);
+  const pool = data.recipePool ?? RECIPES;
+  return pool.map((c) => data.decomp[c]).filter((c) => c?.length === 2);
 }
 export function createGame(
   mode: Mode,
@@ -157,10 +182,12 @@ export function createGame(
   };
   if (mode === "explore") {
     const sample = SAMPLE_SETS[set % SAMPLE_SETS.length];
-    s.focused = sample.board[0];
+    const convert = (character: string) =>
+      data.characterMap?.[character] ?? character;
+    s.focused = convert(sample.board[0]);
     s.message = `Start with ${s.focused}. Click it to discover what’s inside.`;
-    s.board = sample.board.map((c) => tile(s, c));
-    s.tray = sample.tray.map((c) => tile(s, c));
+    s.board = sample.board.map((c) => tile(s, convert(c)));
+    s.tray = sample.tray.map((c) => tile(s, convert(c)));
   } else {
     const pool = recipes(data);
     if (!pool.length) throw new Error("No playable recipes in character data.");
@@ -366,7 +393,8 @@ export function gameReducer(
   }
   if (action.type === "add") {
     if (s.mode !== "explore") return state;
-    const char = normalizeChar(action.char.trim());
+    const entered = normalizeChar(action.char.trim());
+    const char = normalizeChar(data.characterMap?.[entered] ?? entered);
     if (!/^\p{Unified_Ideograph}$/u.test(char) || !data.meta[char])
       return {
         ...s,

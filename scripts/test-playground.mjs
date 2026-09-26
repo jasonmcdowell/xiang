@@ -38,26 +38,48 @@ const load = async (target = page) => {
 };
 const installAudioSpy = (target) =>
   target.addInitScript(() => {
-    const audioParam = {
-      setValueAtTime() {},
-      exponentialRampToValueAtTime() {},
-    };
     window.__tearPopCount = 0;
+    window.__audioFrequencyEvents = [];
+    let nextOscillatorId = 0;
     window.AudioContext = class {
       state = "running";
       currentTime = 0;
       destination = {};
       createOscillator() {
+        const oscillatorId = ++nextOscillatorId;
         return {
           type: "sine",
-          frequency: audioParam,
+          frequency: {
+            setValueAtTime(value, time) {
+              window.__audioFrequencyEvents.push({
+                oscillatorId,
+                action: "set",
+                value,
+                time,
+              });
+            },
+            exponentialRampToValueAtTime(value, time) {
+              window.__audioFrequencyEvents.push({
+                oscillatorId,
+                action: "ramp",
+                value,
+                time,
+              });
+            },
+          },
           connect() {},
           start: () => window.__tearPopCount++,
           stop() {},
         };
       }
       createGain() {
-        return { gain: audioParam, connect() {} };
+        return {
+          gain: {
+            setValueAtTime() {},
+            exponentialRampToValueAtTime() {},
+          },
+          connect() {},
+        };
       }
       resume() {
         return Promise.resolve();
@@ -501,7 +523,32 @@ try {
     await tearSoundPage.evaluate(() => window.__tearPopCount > 0),
     "a successful tear plays the pop when the option is enabled",
   );
+  assert.equal(
+    await tearSoundPage.evaluate(() => window.__tearPopCount),
+    2,
+    "the tear pop combines a sharp transient with a bubble tone",
+  );
+  const popFrequencies = await tearSoundPage.evaluate(
+    () => window.__audioFrequencyEvents,
+  );
+  assert.ok(
+    popFrequencies.some((event) => event.action === "set" && event.value === 1500) &&
+      popFrequencies.some((event) => event.action === "set" && event.value === 340) &&
+      popFrequencies.some((event) => event.action === "ramp" && event.value === 1040),
+    "the synthesized pop has a sharp click and an upward-pitched bubble",
+  );
   await tearSoundPage.mouse.up();
+  const beforeShuffleClacks = await tearSoundPage.evaluate(
+    () => window.__tearPopCount,
+  );
+  await tearSoundPage.getByRole("button", { name: "Shuffle" }).click();
+  await tearSoundPage.waitForFunction(
+    (before) => window.__tearPopCount > before,
+    beforeShuffleClacks,
+    { timeout: 1000 },
+  );
+  await advance(tearSoundPage, 2400);
+  await tearSoundPage.waitForTimeout(1000);
   await tearSoundPage.getByRole("button", { name: "Five starters" }).click();
   await tearSoundPage.waitForFunction(() => {
     const game = JSON.parse(window.render_game_to_text());
@@ -681,10 +728,17 @@ try {
   );
   hskState = await state(hskPage);
   assert.ok(
-    hskState.characters.some((object) => object.char === "學"),
-    "a Traditional HSK 1 pick adds without replacing the Simplified pick",
+    hskState.characters.filter((object) => object.char === "学").length >= 2,
+    "the selected tile-writing system applies to both HSK collections",
   );
   assertNoTileOverlap(hskState.characters, "Traditional HSK 1 addition");
+  await hskPage
+    .locator(".writing-system-picker select")
+    .selectOption("traditional");
+  await hskPage.waitForFunction(() => {
+    const characters = JSON.parse(window.render_game_to_text()).characters;
+    return characters.filter((object) => object.char === "學").length >= 2;
+  });
   assert.ok(hskGlyphRequests.has("5B78"), "load 學's outline on demand");
   await hskPage.screenshot({
     path: "output/playground/hsk1-picker.png",
@@ -2242,6 +2296,47 @@ try {
     "tiles that share 木 as a component are placed next to each other",
   );
 
+  const beforeBlast = toolsState.characters.map((object) => ({
+    char: object.char,
+    center: object.tile.center,
+  }));
+  await toolsPage.getByRole("button", { name: "Blast!" }).click();
+  assert.equal((await state(toolsPage)).animatingTiles, true);
+  await advance(toolsPage, 1400);
+  toolsState = await state(toolsPage);
+  assert.equal(toolsState.animatingTiles, false);
+  assert.ok(
+    toolsState.characters.some((object) => {
+      const before = beforeBlast.find((candidate) => candidate.char === object.char);
+      return Math.hypot(
+        object.tile.center.x - before.center.x,
+        object.tile.center.y - before.center.y,
+      ) > 4;
+    }),
+    "Blast sends tiles to new randomized positions",
+  );
+
+  const beforeShuffle = toolsState.characters.map((object) => ({
+    char: object.char,
+    center: object.tile.center,
+  }));
+  await toolsPage.getByRole("button", { name: "Shuffle" }).click();
+  assert.equal((await state(toolsPage)).animatingTiles, true);
+  await advance(toolsPage, 2400);
+  toolsState = await state(toolsPage);
+  assert.equal(toolsState.animatingTiles, false);
+  assertNoTileOverlap(toolsState.characters, "shuffled board");
+  assert.ok(
+    toolsState.characters.some((object) => {
+      const before = beforeShuffle.find((candidate) => candidate.char === object.char);
+      return Math.hypot(
+        object.tile.center.x - before.center.x,
+        object.tile.center.y - before.center.y,
+      ) > 4;
+    }),
+    "Shuffle swishes tiles into a different order",
+  );
+
   await toolsPage.getByRole("button", { name: "Reset" }).click();
   await toolsPage
     .getByRole("checkbox", { name: "Snap to grid when released" })
@@ -2268,7 +2363,68 @@ try {
     path: "output/playground/snap-to-grid.png",
     fullPage: true,
   });
+
+  await toolsPage.getByRole("button", { name: "Reset" }).click();
+  toolsState = await state(toolsPage);
+  const dragBox = await toolsPage.locator("canvas").boundingBox();
+  assert.ok(dragBox);
+  const 相 = toolsState.characters.find((object) => object.char === "相");
+  await dragTileFace(toolsPage, dragBox, toolsState, "想", {
+    x: 相.tile.center.x,
+    y: 相.tile.center.y,
+  });
+  toolsState = await state(toolsPage);
+  assert.equal(
+    toolsState.renderedInkLayers.at(-1),
+    "想",
+    "a whole tile moves to the front of the stacking order while held",
+  );
+  await toolsPage.mouse.up();
+  assert.equal(
+    (await state(toolsPage)).renderedInkLayers.at(-1),
+    "想",
+    "the dragged tile stays in front after release",
+  );
   await toolsPage.close();
+
+  const keepArrangePage = await browser.newPage({
+    viewport: { width: 1200, height: 1000 },
+  });
+  await load(keepArrangePage);
+  await keepArrangePage.getByRole("checkbox", { name: "Keep arranged" }).check();
+  await keepArrangePage.getByLabel("Arrange mode").selectOption("all-at-once");
+  const keepArrangeBox = await keepArrangePage.locator("canvas").boundingBox();
+  assert.ok(keepArrangeBox);
+  let keepArrangeState = await state(keepArrangePage);
+  keepArrangeState = await tearComponent(
+    keepArrangePage,
+    keepArrangeBox,
+    keepArrangeState,
+    "想",
+    "心",
+  );
+  assert.equal(keepArrangeState.characters.length, 6);
+  assert.equal(
+    keepArrangeState.animatingTiles,
+    false,
+    "keep-arranged waits while the newly torn tile is still held",
+  );
+  await keepArrangePage.mouse.up();
+  assert.equal(
+    (await state(keepArrangePage)).animatingTiles,
+    true,
+    "keep-arranged starts after the component is released",
+  );
+  await advance(keepArrangePage, 1200);
+  keepArrangeState = await state(keepArrangePage);
+  assert.equal(keepArrangeState.animatingTiles, false);
+  assertNoTileOverlap(keepArrangeState.characters, "keep-arranged tear");
+  assert.ok(
+    Math.abs(keepArrangeState.characters[0].tile.center.x - 90) < 1 &&
+      Math.abs(keepArrangeState.characters[0].tile.center.y - 90) < 1,
+    "keep-arranged reapplies the chosen top-left grid after a tear",
+  );
+  await keepArrangePage.close();
 
   const hintPage = await browser.newPage({
     viewport: { width: 1200, height: 1000 },

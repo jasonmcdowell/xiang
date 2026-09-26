@@ -1,18 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import LanguagePicker from "@/components/LanguagePicker";
+import WritingSystemPicker from "@/components/WritingSystemPicker";
 import { useLanguage } from "@/components/LanguageProvider";
 import { translateRuntimeText } from "@/lib/language";
 import { useDragCombine } from "@/hooks/useDragCombine";
 import { useTileMotion } from "@/hooks/useTileMotion";
-import { loadIndices, type IndicesData } from "@/lib/indicesClient";
+import {
+  createWritingSystemIndices,
+  loadIndices,
+  type IndicesData,
+  type WritingSystem,
+} from "@/lib/indicesClient";
 import {
   CAPACITY,
+  RECIPES,
   SAMPLE_SETS,
   composeTiles,
   createGame,
+  convertGameStateCharacters,
   decompose,
   gameReducer,
   type Action,
@@ -49,7 +57,7 @@ function Brand() {
   );
 }
 export default function Home() {
-  const { t } = useLanguage();
+  const { t, writingSystem, characterVariants } = useLanguage();
   const [data, setData] = useState<IndicesData | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -69,11 +77,23 @@ export default function Home() {
       active = false;
     };
   }, [attempt]);
-  if (!data)
+  const activeData = useMemo(
+    () =>
+      data && characterVariants
+        ? createWritingSystemIndices(
+            data,
+            characterVariants[writingSystem],
+            RECIPES,
+          )
+        : null,
+    [data, characterVariants, writingSystem],
+  );
+  if (!activeData)
     return (
       <main className="loading-page">
         <Brand />
         <LanguagePicker />
+        <WritingSystemPicker />
         <div className="loading-glyph">
           <Glyph>想</Glyph>
         </div>
@@ -100,10 +120,16 @@ export default function Home() {
         )}
       </main>
     );
-  return <Game data={data} />;
+  return <Game data={activeData} writingSystem={writingSystem} />;
 }
 
-function Game({ data }: { data: IndicesData }) {
+function Game({
+  data,
+  writingSystem,
+}: {
+  data: IndicesData;
+  writingSystem: WritingSystem;
+}) {
   const { t, language } = useLanguage();
   const [state, setState] = useState<GameState>(() =>
     createGame("explore", data),
@@ -124,9 +150,18 @@ function Game({ data }: { data: IndicesData }) {
   const helpDialog = useRef<HTMLDialogElement>(null);
   const combineButton = useRef<HTMLButtonElement>(null);
   const stateRef = useRef(state);
+  const priorWritingSystem = useRef(writingSystem);
   useEffect(() => {
     stateRef.current = { ...state, focused: guide ?? state.focused };
   }, [state, guide]);
+  useEffect(() => {
+    if (priorWritingSystem.current === writingSystem) return;
+    priorWritingSystem.current = writingSystem;
+    setState((current) =>
+      convertGameStateCharacters(current, data.characterMap ?? {}),
+    );
+    setGuide(null);
+  }, [data, writingSystem]);
   const send = useCallback(
     (action: Action) => {
       if (["split", "compose", "choose", "undo", "drop"].includes(action.type))
@@ -325,6 +360,7 @@ function Game({ data }: { data: IndicesData }) {
             {t("How to play")} <span className="help-circle">?</span>
           </button>
           <LanguagePicker />
+          <WritingSystemPicker />
         </nav>
       </header>
       <main>

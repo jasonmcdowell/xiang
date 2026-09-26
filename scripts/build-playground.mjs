@@ -6,6 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createInterface } from "node:readline";
+import OpenCC from "opencc-js";
 
 const STARTERS = ["想", "相", "明", "休", "好"];
 const SAMPLES = [...STARTERS, "林", "森"];
@@ -53,6 +54,30 @@ const [dictionary, graphics] = await Promise.all([
       entry.strokes.every((stroke) => typeof stroke === "string"),
   ),
 ]);
+
+const toSimplified = OpenCC.Converter({ from: "tw", to: "cn" });
+const toTraditional = OpenCC.Converter({ from: "cn", to: "tw" });
+const conversionCharacters = new Set([
+  ...dictionary.keys(),
+  ...graphics.keys(),
+  ...Object.keys(decompositions),
+  ...Object.values(decompositions).flat(),
+]);
+const characterVariants = { simplified: {}, traditional: {} };
+const playgroundCharacterVariants = { simplified: {}, traditional: {} };
+for (const character of conversionCharacters) {
+  for (const [system, convert] of [
+    ["simplified", toSimplified],
+    ["traditional", toTraditional],
+  ]) {
+    const converted = convert(character);
+    if (isHanCharacter(converted) && converted !== character) {
+      characterVariants[system][character] = converted;
+      if (graphics.has(character) && graphics.has(converted))
+        playgroundCharacterVariants[system][character] = converted;
+    }
+  }
+}
 
 rmSync(GLYPH_DIRECTORY, { recursive: true, force: true });
 rmSync(RECIPE_DIRECTORY, { recursive: true, force: true });
@@ -206,6 +231,28 @@ const manifest = {
 };
 writeFileSync(`${DATA_DIRECTORY}/scene.json`, `${JSON.stringify(manifest)}\n`);
 writeFileSync(
+  `${DATA_DIRECTORY}/variants.json`,
+  `${JSON.stringify({
+    schemaVersion: 1,
+    source: "OpenCC",
+    license: [
+      "/data/licenses/OPENCC-MIT.txt",
+      "/data/licenses/OPENCC-APACHE-2.0.txt",
+    ],
+    mappings: characterVariants,
+    playgroundMappings: playgroundCharacterVariants,
+  })}\n`,
+);
+mkdirSync("public/data/licenses", { recursive: true });
+writeFileSync(
+  "public/data/licenses/OPENCC-MIT.txt",
+  `${readFileSync("node_modules/opencc-js/LICENSE", "utf8").trimEnd()}\n`,
+);
+writeFileSync(
+  "public/data/licenses/OPENCC-APACHE-2.0.txt",
+  `${readFileSync("node_modules/opencc-js/LICENSES/Apache-2.0.txt", "utf8").trimEnd()}\n`,
+);
+writeFileSync(
   `${DATA_DIRECTORY}/hsk1.json`,
   `${JSON.stringify({
     schemaVersion: 1,
@@ -255,6 +302,15 @@ console.log(
       hsk1WithoutOutlines: {
         simplified: hsk1.simplified.unavailableCharacters.length,
         traditional: hsk1.traditional.unavailableCharacters.length,
+      },
+      scriptMappings: {
+        simplified: Object.keys(characterVariants.simplified).length,
+        traditional: Object.keys(characterVariants.traditional).length,
+      },
+      playgroundScriptMappings: {
+        simplified: Object.keys(playgroundCharacterVariants.simplified).length,
+        traditional: Object.keys(playgroundCharacterVariants.traditional)
+          .length,
       },
     },
     null,

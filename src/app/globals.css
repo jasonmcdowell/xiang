@@ -154,6 +154,9 @@ footer a:hover {
   color: var(--ink);
   font-size: 11px;
 }
+.writing-system-picker select {
+  max-width: 156px;
+}
 .help-circle {
   margin-left: 8px;
   display: inline-grid;

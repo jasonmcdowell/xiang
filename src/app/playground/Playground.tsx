@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import LanguagePicker from "@/components/LanguagePicker";
+import WritingSystemPicker from "@/components/WritingSystemPicker";
 import { useLanguage } from "@/components/LanguageProvider";
 import { translateRuntimeText } from "@/lib/language";
 import { publicAssetUrl } from "@/lib/publicAssetUrl";
@@ -41,6 +42,7 @@ import PlaygroundBoard, {
   type BoardMaterial,
 } from "./PlaygroundBoard";
 import type { VisualStyle } from "@/lib/wobbleDrawing";
+import type { WritingSystem } from "@/lib/indicesClient";
 import styles from "./playground.module.css";
 
 type Status = {
@@ -91,8 +93,35 @@ function cloneAssets(assets: PlaygroundAssets): PlaygroundAssets {
   };
 }
 
+function mapCompositionParents(
+  index: Record<string, string[]>,
+  characterMap: Record<string, string>,
+) {
+  const mapped: Record<string, Set<string>> = {};
+  for (const [pair, parents] of Object.entries(index)) {
+    const key = pair
+      .split("|")
+      .map((character) => characterMap[character] ?? character)
+      .sort()
+      .join("|");
+    const values = (mapped[key] ??= new Set());
+    for (const parent of parents) values.add(characterMap[parent] ?? parent);
+  }
+  return Object.fromEntries(
+    Object.entries(mapped).map(([key, values]) => [key, [...values].sort()]),
+  );
+}
+
+function convertText(value: string, characterMap: Record<string, string>) {
+  return Array.from(
+    value,
+    (character) => characterMap[character] ?? character,
+  ).join("");
+}
+
 export default function Playground() {
-  const { t, language } = useLanguage();
+  const { t, language, writingSystem, playgroundCharacterVariants } =
+    useLanguage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<PlaygroundWorld | null>(null);
@@ -104,7 +133,15 @@ export default function Playground() {
   const discoveryRunRef = useRef<DiscoveryRun | null>(null);
   const arrivalQueueRef = useRef<Promise<void>>(Promise.resolve());
   const runGenerationRef = useRef(0);
+  const writingMapRef = useRef<Record<string, string>>({});
+  const previousWritingSystemRef = useRef<WritingSystem>("simplified");
+  const scriptSwitchingRef = useRef(false);
+  const focusTileRef = useRef<(character: string, id: number | null) => void>(
+    () => {},
+  );
   const displayedArrivalSecondRef = useRef<number | null>(null);
+  const keepArrangePendingRef = useRef(new Set<PlaygroundWorld>());
+  const tileSoundTimersRef = useRef<number[]>([]);
   const pointerStartsRef = useRef(new Map<number, PointerStart>());
   const lastTapRef = useRef<PointerStart | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -117,6 +154,8 @@ export default function Playground() {
     visualStyle: "raised" as VisualStyle,
     tileRepulsion: true,
     snapToGrid: false,
+    arrangeMode: "one-by-one" as ArrangeMode,
+    keepArranged: false,
     highlightedTileIds: new Set<number>(),
   });
   const [ready, setReady] = useState(false);
@@ -135,6 +174,7 @@ export default function Playground() {
   const [hskAttempt, setHskAttempt] = useState(0);
   const [characterInput, setCharacterInput] = useState("");
   const [selectionBusy, setSelectionBusy] = useState(false);
+  const [scriptBusy, setScriptBusy] = useState(false);
   const [selectionError, setSelectionError] = useState("");
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -146,6 +186,7 @@ export default function Playground() {
   const [tileRepulsion, setTileRepulsion] = useState(true);
   const [tearSoundEnabled, setTearSoundEnabled] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(false);
+  const [keepArranged, setKeepArranged] = useState(false);
   const [discoveryCollection, setDiscoveryCollection] =
     useState<DiscoveryCollection>("playground");
   const [discoveryCapacity, setDiscoveryCapacity] =
@@ -159,6 +200,7 @@ export default function Playground() {
   const [hintsVisible, setHintsVisible] = useState(false);
   const [hintedTileIds, setHintedTileIds] = useState<number[]>([]);
   const [focusedCharacter, setFocusedCharacter] = useState("想");
+  const focusedCharacterRef = useRef(focusedCharacter);
   const [dictionary, setDictionary] = useState<PlaygroundDictionary | null>(
     null,
   );
@@ -170,6 +212,13 @@ export default function Playground() {
     boardPreset: "starters",
     tileCount: 5,
   });
+  const samplesRef = useRef(samples);
+  const statusRef = useRef(status);
+
+  samplesRef.current = samples;
+  focusedCharacterRef.current = focusedCharacter;
+  statusRef.current = status;
+  writingMapRef.current = playgroundCharacterVariants?.[writingSystem] ?? {};
 
   const publishDiscoveryRun = useCallback((run: DiscoveryRun | null) => {
     discoveryRunRef.current = run;
@@ -177,12 +226,19 @@ export default function Playground() {
   }, []);
 
   const registerAssetsEverywhere = useCallback((assets: PlaygroundAssets) => {
-    assetsRef.current = mergeAssets(assetsRef.current, assets);
+    const currentAssets = {
+      ...assets,
+      compositionParents: mapCompositionParents(
+        assets.compositionParents ?? {},
+        writingMapRef.current,
+      ),
+    };
+    assetsRef.current = mergeAssets(assetsRef.current, currentAssets);
     for (const world of new Set([
       playgroundWorldRef.current,
       discoveryWorldRef.current,
     ]))
-      world?.registerAssets(assets);
+      world?.registerAssets(currentAssets);
   }, []);
 
   const syncDiscoveryBoard = useCallback(
@@ -195,6 +251,147 @@ export default function Playground() {
     },
     [publishDiscoveryRun],
   );
+
+  const applyKeepArrange = useCallback((world: PlaygroundWorld) => {
+    if (!keepArrangePendingRef.current.has(world)) return;
+    if (!settingsRef.current.keepArranged) {
+      keepArrangePendingRef.current.delete(world);
+      return;
+    }
+    if (world.isManipulating || world.isAnimatingTiles) return;
+    keepArrangePendingRef.current.delete(world);
+    if (!world.arrangeTiles(settingsRef.current.arrangeMode)) return;
+    if (worldRef.current === world)
+      setStatus((current) => ({
+        ...current,
+        dragging: false,
+        animatingTiles: world.isAnimatingTiles,
+        tileCount: world.tileCount,
+      }));
+  }, []);
+
+  const requestKeepArrange = useCallback(
+    (world: PlaygroundWorld) => {
+      if (!settingsRef.current.keepArranged) return;
+      keepArrangePendingRef.current.add(world);
+      applyKeepArrange(world);
+    },
+    [applyKeepArrange],
+  );
+
+  useEffect(() => {
+    const characterMap = playgroundCharacterVariants?.[writingSystem];
+    if (
+      !ready ||
+      !characterMap ||
+      previousWritingSystemRef.current === writingSystem
+    )
+      return;
+    previousWritingSystemRef.current = writingSystem;
+    let cancelled = false;
+    scriptSwitchingRef.current = true;
+    setScriptBusy(true);
+
+    const switchTiles = async () => {
+      const manifest = manifestRef.current;
+      if (!manifest) return;
+      const worlds = [
+        playgroundWorldRef.current,
+        discoveryWorldRef.current,
+      ].filter((world): world is PlaygroundWorld => world !== null);
+      const converted: Record<string, string> = {};
+      const preload = async (sources: string[]) => {
+        for (const source of new Set(sources)) {
+          const target = characterMap[source] ?? source;
+          if (source === target || converted[source]) continue;
+          if (
+            worlds.some(
+              (world) =>
+                world.hasRecipeFor(source) &&
+                !manifest.recipeCharacters.includes(target),
+            )
+          )
+            continue;
+          try {
+            const assets = await loadPlaygroundAssets([target], manifest);
+            if (cancelled) return;
+            registerAssetsEverywhere(assets);
+            converted[source] = target;
+          } catch {
+            // Keep this tile in its current script if the variant has no outline.
+          }
+        }
+      };
+
+      const boardCharacters = () =>
+        worlds.flatMap((world) => world.charactersOnBoard());
+      await preload([
+        ...boardCharacters(),
+        ...samplesRef.current,
+        focusedCharacterRef.current,
+        statusRef.current.character,
+      ]);
+      while (
+        !cancelled &&
+        worlds.some((world) => world.isManipulating || world.isAnimatingTiles)
+      )
+        await new Promise((resolve) => window.setTimeout(resolve, 60));
+      if (cancelled) return;
+
+      // A tear can finish while a script switch is waiting for the held stroke.
+      await preload(boardCharacters());
+      if (cancelled) return;
+      for (const world of worlds) world.convertCharacters(converted);
+
+      setSamples((current) =>
+        current.map((character) => converted[character] ?? character),
+      );
+      setCharacterInput((current) => converted[current] ?? current);
+      setFocusedCharacter((current) => converted[current] ?? current);
+      setStatus((current) => ({
+        ...current,
+        character: converted[current.character] ?? current.character,
+        message: convertText(current.message, converted),
+      }));
+      const run = discoveryRunRef.current;
+      if (run) {
+        const toCurrentScript = (character: string) =>
+          characterMap[character] ?? character;
+        publishDiscoveryRun({
+          ...run,
+          drawCharacters: [...new Set(run.drawCharacters.map(toCurrentScript))],
+          discoveries: [
+            ...new Set(run.discoveries.map(toCurrentScript)),
+          ].sort(),
+        });
+      }
+      const activeWorld = worldRef.current;
+      const focusId = focusedTileIdRef.current;
+      if (activeWorld && focusId !== null) {
+        const focused = activeWorld
+          .snapshot()
+          .characters.find((character) => character.id === focusId);
+        if (focused) focusTileRef.current(focused.char, focused.id);
+      }
+    };
+
+    void switchTiles().finally(() => {
+      if (cancelled) return;
+      scriptSwitchingRef.current = false;
+      setScriptBusy(false);
+    });
+    return () => {
+      cancelled = true;
+      scriptSwitchingRef.current = false;
+      setScriptBusy(false);
+    };
+  }, [
+    writingSystem,
+    playgroundCharacterVariants,
+    ready,
+    registerAssetsEverywhere,
+    publishDiscoveryRun,
+  ]);
 
   const enqueueDiscoveryArrivals = useCallback(
     (count: number) => {
@@ -233,6 +430,7 @@ export default function Playground() {
               continue;
             }
             if (result === "added") {
+              requestKeepArrange(world);
               const latest = discoveryRunRef.current;
               if (!latest || latest.phase !== "running") return;
               const observed = recordDiscoveryBoard(
@@ -263,7 +461,7 @@ export default function Playground() {
         });
       }
     },
-    [publishDiscoveryRun, registerAssetsEverywhere],
+    [publishDiscoveryRun, registerAssetsEverywhere, requestKeepArrange],
   );
 
   const advanceRunClock = useCallback(
@@ -295,6 +493,7 @@ export default function Playground() {
     setHintedTileIds([]);
     settingsRef.current.highlightedTileIds.clear();
   }, []);
+  focusTileRef.current = focusTile;
 
   const unlockAudio = useCallback(() => {
     try {
@@ -310,26 +509,94 @@ export default function Playground() {
 
   const playTearPop = useCallback(() => {
     const context = audioContextRef.current;
-    if (!context || context.state !== "running") return;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
+    if (!context) return;
     const now = context.currentTime;
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(560, now);
-    oscillator.frequency.exponentialRampToValueAtTime(155, now + 0.1);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.11, now + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.125);
+    const click = context.createOscillator();
+    const clickGain = context.createGain();
+    click.type = "triangle";
+    click.frequency.setValueAtTime(1500, now);
+    click.frequency.exponentialRampToValueAtTime(520, now + 0.022);
+    clickGain.gain.setValueAtTime(0.0001, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.13, now + 0.002);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+    click.connect(clickGain);
+    clickGain.connect(context.destination);
+    click.start(now);
+    click.stop(now + 0.04);
+
+    const bubble = context.createOscillator();
+    const bubbleGain = context.createGain();
+    bubble.type = "sine";
+    bubble.frequency.setValueAtTime(340, now + 0.008);
+    bubble.frequency.exponentialRampToValueAtTime(1040, now + 0.105);
+    bubble.frequency.exponentialRampToValueAtTime(820, now + 0.145);
+    bubbleGain.gain.setValueAtTime(0.0001, now);
+    bubbleGain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+    bubbleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    bubble.connect(bubbleGain);
+    bubbleGain.connect(context.destination);
+    bubble.start(now);
+    bubble.stop(now + 0.17);
   }, []);
+
+  const playTileClack = useCallback(() => {
+    const context = audioContextRef.current;
+    if (!context) return;
+    const now = context.currentTime;
+    const pitch = 290 + Math.random() * 110;
+    const click = context.createOscillator();
+    const clickGain = context.createGain();
+    click.type = "triangle";
+    click.frequency.setValueAtTime(1240 + Math.random() * 300, now);
+    click.frequency.exponentialRampToValueAtTime(460, now + 0.025);
+    clickGain.gain.setValueAtTime(0.0001, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.08, now + 0.002);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+    click.connect(clickGain);
+    clickGain.connect(context.destination);
+    click.start(now);
+    click.stop(now + 0.045);
+
+    const body = context.createOscillator();
+    const bodyGain = context.createGain();
+    body.type = "sine";
+    body.frequency.setValueAtTime(pitch, now);
+    body.frequency.exponentialRampToValueAtTime(pitch * 0.56, now + 0.09);
+    bodyGain.gain.setValueAtTime(0.0001, now);
+    bodyGain.gain.exponentialRampToValueAtTime(0.09, now + 0.004);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    body.connect(bodyGain);
+    bodyGain.connect(context.destination);
+    body.start(now);
+    body.stop(now + 0.12);
+  }, []);
+
+  const playShuffleClacks = useCallback(
+    (tileCount: number) => {
+      for (const timer of tileSoundTimersRef.current)
+        window.clearTimeout(timer);
+      tileSoundTimersRef.current = [];
+      const clackCount = Math.min(9, Math.max(3, tileCount));
+      for (let index = 0; index < clackCount; index++) {
+        const timer = window.setTimeout(() => {
+          playTileClack();
+          tileSoundTimersRef.current = tileSoundTimersRef.current.filter(
+            (pending) => pending !== timer,
+          );
+        }, index * 105);
+        tileSoundTimersRef.current.push(timer);
+      }
+    },
+    [playTileClack],
+  );
 
   const handleWorldEvents = useCallback(
     (world: PlaygroundWorld) => {
       const events = world.takeEvents();
-      if (events.length) syncDiscoveryBoard(world);
+      if (events.length) {
+        syncDiscoveryBoard(world);
+        requestKeepArrange(world);
+      }
       for (const event of events) {
         const characters = world.snapshot().characters;
         const focused = [...characters]
@@ -339,7 +606,7 @@ export default function Playground() {
         if (event.type === "tear" && tearSoundEnabledRef.current) playTearPop();
       }
     },
-    [focusTile, playTearPop, syncDiscoveryBoard],
+    [focusTile, playTearPop, requestKeepArrange, syncDiscoveryBoard],
   );
 
   useEffect(() => {
@@ -371,8 +638,11 @@ export default function Playground() {
       visualStyle,
       tileRepulsion,
       snapToGrid,
+      arrangeMode,
+      keepArranged,
       highlightedTileIds: settingsRef.current.highlightedTileIds,
     };
+    if (!keepArranged) keepArrangePendingRef.current.clear();
     const world = worldRef.current;
     if (world) {
       world.setSoftness(softness / 100);
@@ -382,7 +652,16 @@ export default function Playground() {
       world.setTileRepulsion(tileRepulsion);
       world.setSnapToGrid(snapToGrid);
     }
-  }, [softness, reduced, mode, visualStyle, tileRepulsion, snapToGrid]);
+  }, [
+    softness,
+    reduced,
+    mode,
+    visualStyle,
+    tileRepulsion,
+    snapToGrid,
+    arrangeMode,
+    keepArranged,
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -396,6 +675,7 @@ export default function Playground() {
     let manual = false;
     let observer: ResizeObserver | null = null;
     let lastAssetSignature = "";
+    const pendingKeepArranges = keepArrangePendingRef.current;
     manifestRef.current = null;
 
     const draw = () => {
@@ -498,7 +778,8 @@ export default function Playground() {
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
     };
     const down = (event: PointerEvent) => {
-      if (event.button !== 0 || !worldRef.current) return;
+      if (event.button !== 0 || !worldRef.current || scriptSwitchingRef.current)
+        return;
       if (
         activeTabRef.current === "discovery" &&
         discoveryRunRef.current?.phase !== "running"
@@ -553,6 +834,7 @@ export default function Playground() {
         !start.moved &&
         Math.hypot(point.x - start.start.x, point.y - start.start.y) <= 12;
       world.pointerUp(point, event.pointerId);
+      applyKeepArrange(world);
       pointerStartsRef.current.delete(event.pointerId);
       if (canvas.hasPointerCapture(event.pointerId))
         canvas.releasePointerCapture(event.pointerId);
@@ -573,6 +855,7 @@ export default function Playground() {
           lastTapRef.current = null;
           world.unfoldTile(start.id);
           handleWorldEvents(world);
+          applyKeepArrange(world);
           requestSceneAssets();
         } else
           lastTapRef.current = {
@@ -590,13 +873,14 @@ export default function Playground() {
       pointerStartsRef.current.delete(event.pointerId);
       lastTapRef.current = null;
       handleWorldEvents(world);
+      applyKeepArrange(world);
       canvas.style.cursor = world.pointerIds.length ? "grabbing" : "grab";
       publish();
       draw();
     };
     const onKey = (event: KeyboardEvent) => {
       const world = worldRef.current;
-      if (!world) return;
+      if (!world || scriptSwitchingRef.current) return;
       if (
         activeTabRef.current === "discovery" &&
         (discoveryRunRef.current?.phase !== "running" ||
@@ -668,6 +952,7 @@ export default function Playground() {
       if (world.advance(ms)) publish();
       if (activeTabRef.current === "discovery") advanceRunClock(ms);
       handleWorldEvents(world);
+      applyKeepArrange(world);
       requestSceneAssets();
       draw();
     };
@@ -678,6 +963,7 @@ export default function Playground() {
         while (elapsed >= STEP) {
           if (world.step()) publish();
           handleWorldEvents(world);
+          applyKeepArrange(world);
           requestSceneAssets();
           if (activeTabRef.current === "discovery")
             advanceRunClock(STEP * 1000);
@@ -730,7 +1016,7 @@ export default function Playground() {
         if (disposed) return;
         if (!assets.recipes?.length || !assets.glyphs)
           throw new Error("Incomplete playground data");
-        assetsRef.current = mergeAssets(null, assets);
+        registerAssetsEverywhere(assets);
         const resize = () => {
           cancel();
           const rect = canvas.getBoundingClientRect();
@@ -779,6 +1065,10 @@ export default function Playground() {
 
     return () => {
       disposed = true;
+      for (const timer of tileSoundTimersRef.current)
+        window.clearTimeout(timer);
+      tileSoundTimersRef.current = [];
+      pendingKeepArranges.clear();
       cancel();
       cancelAnimationFrame(frame);
       cancelAnimationFrame(preferenceFrame);
@@ -802,6 +1092,7 @@ export default function Playground() {
     };
   }, [
     attempt,
+    applyKeepArrange,
     advanceRunClock,
     focusTile,
     handleWorldEvents,
@@ -879,7 +1170,9 @@ export default function Playground() {
     try {
       let drawSet =
         discoveryCollection === "playground"
-          ? [...manifest.sampleCharacters]
+          ? manifest.sampleCharacters.map(
+              (character) => writingMapRef.current[character] ?? character,
+            )
           : null;
       if (!drawSet) {
         const catalog = hskCharacters ?? (await loadPlaygroundHsk1());
@@ -890,6 +1183,9 @@ export default function Playground() {
             : "simplified";
         drawSet = [...catalog.sets[variant].characters];
       }
+      drawSet = drawSet.map(
+        (character) => writingMapRef.current[character] ?? character,
+      );
       drawSet = [...new Set(drawSet)].filter(
         (character) => Array.from(character).length === 1,
       );
@@ -936,6 +1232,7 @@ export default function Playground() {
       world.startCellBoard(initialCharacter);
       discoveryWorldRef.current = world;
       worldRef.current = world;
+      requestKeepArrange(world);
       activeTabRef.current = "discovery";
       setGameTab("discovery");
       displayedArrivalSecondRef.current = 10;
@@ -948,6 +1245,7 @@ export default function Playground() {
         character: initialCharacter,
         boardPreset: world.boardPreset,
         tileCount: world.tileCount,
+        animatingTiles: world.isAnimatingTiles,
       });
     } catch (reason) {
       setDiscoveryError(
@@ -961,30 +1259,31 @@ export default function Playground() {
   };
 
   const selectCharacter = async (char: string) => {
+    const character = writingMapRef.current[char] ?? char;
     const world = worldRef.current;
     const manifest = manifestRef.current;
     if (!world || !manifest) return;
     setSelectionBusy(true);
     setSelectionError("");
     try {
-      const assets = await loadPlaygroundAssets([char], manifest);
+      const assets = await loadPlaygroundAssets([character], manifest);
       if (worldRef.current !== world) return;
       world.registerAssets(assets);
-      world.reset(char);
+      world.reset(character);
     } catch {
       setSelectionError(
-        `No usable drawing data was found for ${char}. Try another dictionary character.`,
+        `No usable drawing data was found for ${character}. Try another dictionary character.`,
       );
       setSelectionBusy(false);
       return;
     }
     setSelectionBusy(false);
     const focused = world.snapshot().characters[0];
-    focusTile(char, focused?.id ?? null);
+    focusTile(character, focused?.id ?? null);
     setStatus({
       phase: world.phase,
       message: world.message,
-      character: char,
+      character,
       boardPreset: world.boardPreset,
       tileCount: world.tileCount,
     });
@@ -1015,7 +1314,9 @@ export default function Playground() {
     value = characterInput,
     clearInput = false,
   ) => {
-    const character = value.trim();
+    const enteredCharacter = value.trim();
+    const character =
+      writingMapRef.current[enteredCharacter] ?? enteredCharacter;
     if (Array.from(character).length !== 1) {
       setSelectionError("Enter one Chinese character.");
       return;
@@ -1031,6 +1332,7 @@ export default function Playground() {
       world.registerAssets(assets);
       const result = world.addCharacter(character);
       if (result === "added") {
+        requestKeepArrange(world);
         const added = world.snapshot().characters.at(-1);
         focusTile(character, added?.id ?? null);
       }
@@ -1117,6 +1419,30 @@ export default function Playground() {
   const arrangeTiles = () => {
     const world = worldRef.current;
     if (!world || !world.arrangeTiles(arrangeMode)) return;
+    keepArrangePendingRef.current.delete(world);
+    setStatus((current) => ({
+      ...current,
+      dragging: world.isManipulating,
+      animatingTiles: world.isAnimatingTiles,
+    }));
+  };
+  const blastTiles = () => {
+    const world = worldRef.current;
+    if (!world || !world.blastTiles()) return;
+    keepArrangePendingRef.current.delete(world);
+    setStatus((current) => ({
+      ...current,
+      dragging: world.isManipulating,
+      animatingTiles: world.isAnimatingTiles,
+    }));
+  };
+  const shuffleTiles = () => {
+    const world = worldRef.current;
+    if (!world) return;
+    unlockAudio();
+    if (!world.shuffleTiles()) return;
+    keepArrangePendingRef.current.delete(world);
+    playShuffleClacks(world.tileCount);
     setStatus((current) => ({
       ...current,
       dragging: world.isManipulating,
@@ -1138,7 +1464,13 @@ export default function Playground() {
     setHintsVisible(true);
   };
   const tileActionsDisabled =
-    !ready || selectionBusy || !!status.dragging || !!status.animatingTiles;
+    !ready ||
+    selectionBusy ||
+    scriptBusy ||
+    !!status.dragging ||
+    !!status.animatingTiles;
+  const discoveryActionsDisabled =
+    tileActionsDisabled || discoveryRun?.phase !== "running";
   const boardDescription =
     status.boardPreset === "starters"
       ? t("{count} starter characters", { count: status.tileCount })
@@ -1172,6 +1504,7 @@ export default function Playground() {
           {t("Back to the game ↗")}
         </Link>
         <LanguagePicker />
+        <WritingSystemPicker />
       </header>
       <nav
         className={styles.gameTabs}
@@ -1450,7 +1783,7 @@ export default function Playground() {
                     <button
                       key={char}
                       type="button"
-                      disabled={!ready || selectionBusy}
+                      disabled={!ready || selectionBusy || scriptBusy}
                       aria-pressed={
                         status.boardPreset === "single" &&
                         status.character === char
@@ -1477,19 +1810,24 @@ export default function Playground() {
                       value={characterInput}
                       maxLength={2}
                       autoComplete="off"
-                      disabled={!ready || selectionBusy}
+                      disabled={!ready || selectionBusy || scriptBusy}
                       onChange={(event) =>
                         setCharacterInput(event.target.value)
                       }
                       aria-describedby="playground-character-help"
                     />
-                    <button type="submit" disabled={!ready || selectionBusy}>
-                      {selectionBusy ? t("Loading…") : t("Explore")}
+                    <button
+                      type="submit"
+                      disabled={!ready || selectionBusy || scriptBusy}
+                    >
+                      {selectionBusy || scriptBusy
+                        ? t("Loading…")
+                        : t("Explore")}
                     </button>
                     <button
                       type="button"
                       aria-label={t("Add to board")}
-                      disabled={!ready || selectionBusy}
+                      disabled={!ready || selectionBusy || scriptBusy}
                       onClick={() =>
                         void addCharacterToBoard(characterInput, true)
                       }
@@ -1597,7 +1935,7 @@ export default function Playground() {
                                 aria-label={t("Add {char} from HSK 1", {
                                   char,
                                 })}
-                                disabled={!ready || selectionBusy}
+                                disabled={!ready || selectionBusy || scriptBusy}
                                 onClick={() => void addCharacterToBoard(char)}
                               >
                                 {char}
@@ -1700,6 +2038,20 @@ export default function Playground() {
                 <button
                   type="button"
                   disabled={tileActionsDisabled}
+                  onClick={blastTiles}
+                >
+                  {t("Blast!")}
+                </button>
+                <button
+                  type="button"
+                  disabled={tileActionsDisabled || status.tileCount < 2}
+                  onClick={shuffleTiles}
+                >
+                  {t("Shuffle")}
+                </button>
+                <button
+                  type="button"
+                  disabled={tileActionsDisabled}
                   onClick={arrangeTiles}
                 >
                   {t("Arrange tiles")}
@@ -1707,8 +2059,20 @@ export default function Playground() {
                 <label className={styles.tileToolCheck}>
                   <input
                     type="checkbox"
+                    checked={keepArranged}
+                    disabled={!ready || selectionBusy || scriptBusy}
+                    onChange={(event) => setKeepArranged(event.target.checked)}
+                  />
+                  {t("Keep arranged")}
+                </label>
+                <p className={styles.tileToolStatus}>
+                  {t("Re-run this arrange mode whenever new tiles are added.")}
+                </p>
+                <label className={styles.tileToolCheck}>
+                  <input
+                    type="checkbox"
                     checked={snapToGrid}
-                    disabled={!ready || selectionBusy}
+                    disabled={!ready || selectionBusy || scriptBusy}
                     onChange={(event) => setSnapToGrid(event.target.checked)}
                   />
                   {t("Snap to grid when released")}
@@ -1984,6 +2348,62 @@ export default function Playground() {
                 )}
               </div>
             )}
+            <section className={styles.tileTools} aria-label={t("Tile tools")}>
+              <label
+                className={styles.controlLabel}
+                htmlFor="discovery-arrange-mode"
+              >
+                {t("Arrange mode")}
+              </label>
+              <select
+                id="discovery-arrange-mode"
+                aria-label={t("Arrange mode")}
+                value={arrangeMode}
+                disabled={!ready || selectionBusy || scriptBusy}
+                onChange={(event) =>
+                  setArrangeMode(event.target.value as ArrangeMode)
+                }
+              >
+                <option value="one-by-one">{t("One at a time")}</option>
+                <option value="all-at-once">{t("All at once")}</option>
+                <option value="by-component">
+                  {t("Group by shared components")}
+                </option>
+              </select>
+              <button
+                type="button"
+                disabled={discoveryActionsDisabled}
+                onClick={blastTiles}
+              >
+                {t("Blast!")}
+              </button>
+              <button
+                type="button"
+                disabled={discoveryActionsDisabled || status.tileCount < 2}
+                onClick={shuffleTiles}
+              >
+                {t("Shuffle")}
+              </button>
+              <button
+                type="button"
+                disabled={discoveryActionsDisabled}
+                onClick={arrangeTiles}
+              >
+                {t("Arrange tiles")}
+              </button>
+              <label className={styles.tileToolCheck}>
+                <input
+                  type="checkbox"
+                  checked={keepArranged}
+                  disabled={!ready || selectionBusy || scriptBusy}
+                  onChange={(event) => setKeepArranged(event.target.checked)}
+                />
+                {t("Keep arranged")}
+              </label>
+              <p className={styles.tileToolStatus}>
+                {t("Re-run this arrange mode whenever new tiles are added.")}
+              </p>
+            </section>
             <footer className={styles.footer}>
               <p id="playground-keys">
                 {t(
